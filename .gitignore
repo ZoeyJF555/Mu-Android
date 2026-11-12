@@ -1,0 +1,34 @@
+# Build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+.vs/
+.idea/
+.vscode/
+
+# MonoGame content pipeline
+Content/bin/
+Content/obj/
+
+# Android
+*.apk
+*.aab
+*.keystore
+*.jks
+*.p12
+local.properties
+
+# Game assets (not part of the source tree)
+Data/
+*.zip
+
+# Local settings
+appsettings.Local.json
+*.local.json
+
+# OS noise
+.DS_Store
+Thumbs.db
