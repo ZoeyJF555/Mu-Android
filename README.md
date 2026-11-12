@@ -1,73 +1,73 @@
 # Mu Android
 
-Cliente de MU Online escrito en C# sobre .NET 9 y MonoGame, con el mismo código
-para escritorio y Android.
+A MU Online client written in C# on .NET 9 and MonoGame, sharing the same code
+between desktop and Android.
 
-Proyecto propio: la lógica, la estructura y el código se escriben aquí desde
-cero, apoyándose en los formatos públicos de los ficheros de datos del cliente
+This is an original project: the logic, structure and code are written here from
+scratch, using the publicly documented formats of the client data files
 (BMD, OZJ, OZB, OZT, ATT, MAP...).
 
-## Estado
+## Status
 
-Base inicial en construcción:
+Early foundation, work in progress:
 
-- [x] Solución .NET 9 con proyectos separados por responsabilidad.
-- [x] Lector de modelos BMD (mallas, huesos y acciones) con soporte de BMD v12 cifrado.
-- [x] Resolución de rutas de datos insensible a mayúsculas (Linux y Android).
-- [x] Bucle de juego MonoGame compartido entre escritorio y Android.
-- [ ] Cifrado LEA de los BMD v15.
-- [ ] Lectura de texturas OZJ/OZT y mundos OZB.
-- [ ] Renderizado de modelos con skinning.
-- [ ] Red y login.
+- [x] .NET 9 solution with projects split by responsibility.
+- [x] BMD model reader (meshes, bones and actions) with support for encrypted BMD v12.
+- [x] Case-insensitive data path resolution (Linux and Android).
+- [x] MonoGame game loop shared between desktop and Android.
+- [ ] LEA decryption for BMD v15.
+- [ ] OZJ/OZT texture and OZB world loading.
+- [ ] Model rendering with skinning.
+- [ ] Networking and login.
 
-## Estructura
+## Structure
 
 ```
 src/
-  MuCore/            Lógica pura: formatos, IO y servicios (sin MonoGame)
-    Assets/          AssetStore: localización de recursos del cliente
-    Formats/Bmd/     Modelo y lector del formato BMD
-    IO/              Lectura binaria con comprobación de límites
-  MuClient.Shared/   Juego MonoGame compartido (bucle, escenas, UI)
-  MuClient/          Entrada de escritorio (MonoGame DesktopGL)
-  MuClient.Android/  Entrada Android (net9.0-android)
+  MuCore/            Pure logic: formats, IO and services (no MonoGame)
+    Assets/          AssetStore: client resource lookup
+    Formats/Bmd/     BMD format model and reader
+    IO/              Bounds-checked binary reading
+  MuClient.Shared/   Shared MonoGame game (loop, scenes, UI)
+  MuClient/          Desktop entry point (MonoGame DesktopGL)
+  MuClient.Android/  Android entry point (net9.0-android)
 ```
 
-## Requisitos
+## Requirements
 
 - .NET SDK 9.0
-- Para Android: `dotnet workload install android`, Android SDK y JDK 17+
+- For Android: `dotnet workload install android`, the Android SDK and JDK 17+
 
-## Compilar y ejecutar (escritorio)
+## Build and run (desktop)
 
 ```bash
 dotnet build src/MuClient/MuClient.csproj -c Release
 dotnet run --project src/MuClient
 ```
 
-## Compilar para Android
+## Build for Android
 
 ```bash
 dotnet workload install android
 dotnet build src/MuClient.Android/MuClient.Android.csproj -c Release
 ```
 
-Para generar el APK:
+To produce the APK:
 
 ```bash
 dotnet publish src/MuClient.Android/MuClient.Android.csproj -f net9.0-android -c Release
 ```
 
-## Datos del cliente
+## Client data
 
-Los recursos del juego (texturas, modelos, mapas) no se incluyen en el
-repositorio. `Mu.Core.Assets.AssetStore` recibe la ruta del directorio de datos
-y resuelve los nombres con barras invertidas e insensible a mayúsculas, como los
-usan los ficheros originales.
+Game assets (textures, models, maps) are not included in the repository.
+`Mu.Core.Assets.AssetStore` takes the path to the data directory and resolves
+names with backslashes and case-insensitively, the way the original files
+reference them.
 
-## Formatos soportados
+## Supported formats
 
-| Formato | Uso | Estado |
-| ------- | --- | ------ |
-| BMD v12 | Modelos y animaciones | Lectura completa |
-| BMD v15 | Modelos y animaciones (LEA) | Pendiente |
+| Format | Purpose | State |
+| ------ | ------- | ----- |
+| BMD v12 | Models and animations | Fully read |
+| BMD v15 | Models and animations (LEA) | Pending |
