@@ -94,7 +94,7 @@ public sealed class CharacterCreateScene : Scene
         renderer.Begin();
 
         renderer.Fill(new Rectangle(0, 0, width, height), new Color(8, 10, 16));
-        renderer.TextCentered("CREAR PERSONAJE", new Rectangle(0, 20, width, 50), 3.4f, Theme.Title);
+        renderer.TextCentered("CREAR PERSONAJE", TitleArea(), 3.0f, Theme.Title);
 
         renderer.Text("NOMBRE", new Vector2(NameField().X, NameField().Y - 26), 1.8f, Theme.TextDim);
         renderer.Fill(NameField(), new Color(20, 20, 26, 240));
@@ -120,22 +120,26 @@ public sealed class CharacterCreateScene : Scene
         Theme.Button(renderer, ConfirmButton(), "CREAR", input.Holding(ConfirmButton()), 2.2f);
         Theme.Button(renderer, CancelButton(), "VOLVER", input.Holding(CancelButton()), 2.2f);
 
-        renderer.TextCentered(
-            _message,
-            new Rectangle(0, ConfirmButton().Bottom + 8, width, 28),
-            1.6f,
-            _messageIsError ? new Color(255, 130, 120) : Theme.TextDim);
+        renderer.TextCentered(_message, MessageArea(), 1.6f, _messageIsError ? new Color(255, 130, 120) : Theme.TextDim);
 
         KeyboardPanel.Draw(renderer, input, width, height);
 
         renderer.End();
     }
 
+    /// <summary>La franja del título, encima de todo.</summary>
+    public static Rectangle TitleArea()
+    {
+        var form = OnScreenKeyboard.FormArea(VirtualCanvas.Width, VirtualCanvas.Height);
+        return new Rectangle(0, form.Y, VirtualCanvas.Width, 30);
+    }
+
     /// <summary>El recuadro del nombre.</summary>
     public static Rectangle NameField()
     {
+        var form = OnScreenKeyboard.FormArea(VirtualCanvas.Width, VirtualCanvas.Height);
         var width = Math.Min(720, VirtualCanvas.Width - 120);
-        return new Rectangle((VirtualCanvas.Width - width) / 2, 104, width, 56);
+        return new Rectangle((VirtualCanvas.Width - width) / 2, form.Y + 52, width, 46);
     }
 
     /// <summary>El botón de una clase.</summary>
@@ -143,10 +147,10 @@ public sealed class CharacterCreateScene : Scene
     {
         var field = NameField();
         const int gap = 16;
-        const int height = 100;
+        const int height = 92;
         var total = field.Width;
         var width = (total - (gap * (CharacterClasses.All.Length - 1))) / CharacterClasses.All.Length;
-        return new Rectangle(field.X + (index * (width + gap)), field.Bottom + 48, width, height);
+        return new Rectangle(field.X + (index * (width + gap)), field.Bottom + 24, width, height);
     }
 
     /// <summary>El botón de confirmar.</summary>
@@ -154,7 +158,15 @@ public sealed class CharacterCreateScene : Scene
     {
         var field = NameField();
         var width = (field.Width - 16) / 2;
-        return new Rectangle(field.X, ClassButton(0).Bottom + 16, width, 56);
+        return new Rectangle(field.X, ClassButton(0).Bottom + 14, width, 46);
+    }
+
+    /// <summary>La franja del mensaje, debajo de los botones.</summary>
+    public static Rectangle MessageArea()
+    {
+        var confirm = ConfirmButton();
+        var form = OnScreenKeyboard.FormArea(VirtualCanvas.Width, VirtualCanvas.Height);
+        return new Rectangle(0, confirm.Bottom + 4, VirtualCanvas.Width, Math.Max(20, form.Bottom - confirm.Bottom - 4));
     }
 
     /// <summary>El botón de volver.</summary>

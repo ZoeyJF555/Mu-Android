@@ -184,6 +184,16 @@ sistema (comprobado inspeccionando el DLL), así que el juego dibuja el suyo:
 dibuja nada; solo guarda el texto. El formulario de login se coloca con
 `OnScreenKeyboard.FormArea`, que garantiza que nunca pisa el teclado.
 
+El teclado se reparte en cuatro filas, como el de serie del móvil, no en cinco:
+una fila menos deja cada tecla más alta. Es lo que hace que midan 7 mm o más de
+alto, el mínimo para acertar con el dedo. Con cinco filas se quedaban en 4 mm y
+no se podían pulsar en un móvil real (con un ratón, sí). La prueba
+`LasTeclasSonLoBastanteAltasParaElDedo` calcula el alto en milímetros sobre
+varios teléfonos y falla si baja de 7 mm, así que no se puede encoger sin que
+salte. Al tocar la altura del teclado hay que comprobar que el formulario de
+login y el de crear personaje siguen cabiendo encima en cualquier forma de
+pantalla.
+
 ## Pruebas
 
 ```bash

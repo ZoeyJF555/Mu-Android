@@ -28,6 +28,12 @@ public readonly record struct KeyboardKey(string Label, char Value, KeyboardActi
 /// con este teclado se escribe igual en cualquier móvil y sin depender de nada
 /// de fuera. La colocación de las teclas está aparte del dibujo para poder
 /// probarla sin pantalla.
+///
+/// Se reparte en cuatro filas, como el teclado de serie del móvil, y no en
+/// cinco: con una fila menos cada tecla sale más alta. Es lo que hace que una
+/// tecla mida unos 7 mm en un móvil normal, que es el tamaño mínimo para
+/// acertarla con el dedo. Con cinco filas se quedaba en 4 mm y no se podía
+/// pulsar sin apuntar con un ratón.
 /// </summary>
 public static class OnScreenKeyboard
 {
@@ -38,21 +44,28 @@ public static class OnScreenKeyboard
     public const int Gap = 8;
 
     /// <summary>Alto total del teclado, en píxeles. Deja sitio al formulario encima.</summary>
-    public const int AreaHeight = 260;
+    public const int AreaHeight = 352;
 
     /// <summary>Dónde empieza la zona del formulario, contando desde arriba.</summary>
-    public const int FormTop = 80;
+    public const int FormTop = 8;
 
     /// <summary>Separación entre el formulario y el teclado, en píxeles.</summary>
-    public const int FormGap = 24;
+    public const int FormGap = 16;
 
-    /// <summary>Las teclas que se ofrecen en cada fila de letras.</summary>
-    private static readonly string[] Rows =
+    /// <summary>Cuántas teclas caben a lo ancho en cada fila.</summary>
+    private const int Columns = 10;
+
+    /// <summary>
+    /// Las letras de cada fila, de arriba abajo. Las dos últimas traen una tecla
+    /// menos porque cierran con una de las teclas de acción, que van en la
+    /// columna que queda libre.
+    /// </summary>
+    private static readonly string[] CharacterRows =
     [
         "1234567890",
         "QWERTYUIOP",
-        "ASDFGHJKL-",
-        "ZXCVBNM_.",
+        "ASDFGHJKL",
+        "ZXCVBNM-_",
     ];
 
     /// <summary>Zona que ocupa el teclado, pegado al borde inferior del lienzo.</summary>
@@ -82,17 +95,16 @@ public static class OnScreenKeyboard
     public static IReadOnlyList<KeyboardKey> Build(int canvasWidth, int canvasHeight)
     {
         var area = Area(canvasWidth, canvasHeight);
-        var rows = Rows.Length + 1;
-        var columns = 10;
+        var rows = CharacterRows.Length;
 
-        var keyWidth = (area.Width - ((columns - 1) * Gap)) / columns;
+        var keyWidth = (area.Width - ((Columns - 1) * Gap)) / Columns;
         var keyHeight = (area.Height - ((rows - 1) * Gap)) / rows;
 
         var keys = new List<KeyboardKey>();
 
-        for (var row = 0; row < Rows.Length; row++)
+        for (var row = 0; row < rows; row++)
         {
-            var letters = Rows[row];
+            var letters = CharacterRows[row];
             var y = area.Y + (row * (keyHeight + Gap));
 
             for (var column = 0; column < letters.Length; column++)
@@ -106,22 +118,14 @@ public static class OnScreenKeyboard
             }
         }
 
-        // La última fila lleva el borrado y el "listo", que no escriben letras.
-        var actionY = area.Y + (Rows.Length * (keyHeight + Gap));
-        var backWidth = (keyWidth * 3) + (Gap * 2);
-        var doneWidth = (keyWidth * 3) + (Gap * 2);
+        // Borrar y listo van en la última columna de las dos últimas filas, que
+        // son las que traen una tecla menos, para no gastar una fila entera.
+        var actionX = area.X + ((Columns - 1) * (keyWidth + Gap));
+        var backRowY = area.Y + ((rows - 2) * (keyHeight + Gap));
+        var doneRowY = area.Y + ((rows - 1) * (keyHeight + Gap));
 
-        keys.Add(new KeyboardKey(
-            "BORRAR",
-            '\0',
-            KeyboardAction.Backspace,
-            new CanvasRect(area.X, actionY, backWidth, keyHeight)));
-
-        keys.Add(new KeyboardKey(
-            "LISTO",
-            '\0',
-            KeyboardAction.Enter,
-            new CanvasRect(area.Right - doneWidth, actionY, doneWidth, keyHeight)));
+        keys.Add(new KeyboardKey("BORRAR", '\0', KeyboardAction.Backspace, new CanvasRect(actionX, backRowY, keyWidth, keyHeight)));
+        keys.Add(new KeyboardKey("LISTO", '\0', KeyboardAction.Enter, new CanvasRect(actionX, doneRowY, keyWidth, keyHeight)));
 
         return keys;
     }

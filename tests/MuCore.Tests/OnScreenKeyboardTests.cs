@@ -119,4 +119,31 @@ public class OnScreenKeyboardTests
             Assert.True(form.Height > 200, $"el formulario queda muy bajo en {width}x{height}");
         }
     }
+
+    [Fact]
+    public void LasTeclasSonLoBastanteAltasParaElDedo()
+    {
+        // El tamaño que importa no es el del lienzo, sino el que acaba teniendo
+        // la tecla en el móvil: una tecla de menos de 7 mm no se acierta con el
+        // dedo. El lienzo mide siempre 720 de alto y se escala para llenar la
+        // pantalla, así que el alto de la tecla en milímetros es su alto en el
+        // lienzo repartido por la altura física de la pantalla.
+        var key = OnScreenKeyboard.Build(1560, 720).First(k => k.Value == 'A');
+
+        foreach (var (pixelsWide, pixelsHigh, inches) in new[]
+        {
+            (2340, 1080, 6.0),  // Pixel 5
+            (2400, 1080, 6.2),  // Galaxy S21
+            (2340, 1080, 6.4),  // Galaxy A54
+            (1280, 720, 5.0),   // un móvil antiguo
+        })
+        {
+            var diagonal = Math.Sqrt((pixelsWide * pixelsWide) + (pixelsHigh * pixelsHigh));
+            var millimetresPerPixel = 25.4 / (diagonal / inches);
+            var screenHeightMillimetres = pixelsHigh * millimetresPerPixel;
+            var keyMillimetres = key.Bounds.Height / 720.0 * screenHeightMillimetres;
+
+            Assert.True(keyMillimetres >= 7.0, $"la tecla mide {keyMillimetres:0.0} mm en {pixelsWide}x{pixelsHigh}, menos de lo que pide un dedo");
+        }
+    }
 }
