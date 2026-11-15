@@ -160,7 +160,7 @@ public sealed class LoginScene : Scene
 
         renderer.Fill(new Rectangle(0, 0, width, height), new Color(8, 10, 16));
 
-        renderer.TextCentered("MU ONLINE   SIN CONEXION", new Rectangle(0, 16, width, 48), 3.2f, Theme.Title);
+        renderer.TextCentered("MU ONLINE   SIN CONEXION", TitleArea(), 3.0f, Theme.Title);
 
         var panel = Panel();
         Theme.Panel(renderer, panel);
@@ -171,11 +171,7 @@ public sealed class LoginScene : Scene
         Theme.Button(renderer, EnterButton(), "ENTRAR", input.Holding(EnterButton()), 2.4f);
         Theme.Button(renderer, CreateButton(), "CREAR CUENTA", input.Holding(CreateButton()), 2.4f);
 
-        renderer.TextCentered(
-            _message,
-            new Rectangle(panel.X, panel.Bottom + 2, panel.Width, 24),
-            1.6f,
-            _messageIsError ? new Color(255, 130, 120) : Theme.TextDim);
+        renderer.TextCentered(_message, MessageArea(), 1.6f, _messageIsError ? new Color(255, 130, 120) : Theme.TextDim);
 
         KeyboardPanel.Draw(renderer, input, width, height);
 
@@ -198,23 +194,39 @@ public sealed class LoginScene : Scene
     {
         var form = OnScreenKeyboard.FormArea(VirtualCanvas.Width, VirtualCanvas.Height);
         var width = Math.Min(760, form.Width - 120);
-        var top = form.Y + 6;
-        var height = Math.Max(240, form.Bottom - top - 8);
+        // El título y el mensaje van en franjas propias; el panel ocupa el resto.
+        var top = form.Y + 38;
+        var height = Math.Max(200, form.Bottom - top - 28);
         return new Rectangle((VirtualCanvas.Width - width) / 2, top, width, height);
+    }
+
+    /// <summary>La franja del mensaje, justo debajo del panel.</summary>
+    public static Rectangle MessageArea()
+    {
+        var panel = Panel();
+        var form = OnScreenKeyboard.FormArea(VirtualCanvas.Width, VirtualCanvas.Height);
+        return new Rectangle(panel.X, panel.Bottom + 2, panel.Width, Math.Max(20, form.Bottom - panel.Bottom - 2));
+    }
+
+    /// <summary>La franja donde va el título, encima del panel.</summary>
+    public static Rectangle TitleArea()
+    {
+        var form = OnScreenKeyboard.FormArea(VirtualCanvas.Width, VirtualCanvas.Height);
+        return new Rectangle(0, form.Y, VirtualCanvas.Width, 36);
     }
 
     /// <summary>El recuadro donde se escribe la cuenta.</summary>
     public static Rectangle AccountField()
     {
         var panel = Panel();
-        return new Rectangle(panel.X + 36, panel.Y + 46, panel.Width - 72, 52);
+        return new Rectangle(panel.X + 36, panel.Y + 34, panel.Width - 72, 50);
     }
 
     /// <summary>El recuadro donde se escribe la contraseña.</summary>
     public static Rectangle PasswordField()
     {
         var account = AccountField();
-        return new Rectangle(account.X, account.Y + 96, account.Width, account.Height);
+        return new Rectangle(account.X, account.Bottom + 44, account.Width, account.Height);
     }
 
     /// <summary>El botón de entrar.</summary>
@@ -222,7 +234,7 @@ public sealed class LoginScene : Scene
     {
         var panel = Panel();
         var width = (panel.Width - 84) / 2;
-        return new Rectangle(panel.X + 36, PasswordField().Bottom + 28, width, 58);
+        return new Rectangle(panel.X + 36, PasswordField().Bottom + 20, width, 54);
     }
 
     /// <summary>El botón de crear la cuenta.</summary>
