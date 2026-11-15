@@ -79,3 +79,35 @@ el prefijo para juntarlos en un solo árbol.
 Comprobado: los ficheros nativos del sitio web son idénticos a los del cliente
 de referencia, así que no aportan nada nuevo en estos formatos. Lo que solo
 tiene la web son GLB (monstruos, efectos) y audio, que este cliente no lee.
+
+## Empaquetar el juego en un APK
+
+El APK se compila sin datos, pero entonces el juego avisa de que le faltan. Para
+que funcione hay que indicar la carpeta de datos:
+
+```bash
+dotnet build src/MuClient.Android/MuClient.Android.csproj -c Release \
+  -p:MuDataFolder=/ruta/a/Data
+```
+
+Los datos se meten como recursos del paquete y se leen con `AndroidAssetSource`,
+que no los trata como ficheros del disco sino como entradas del APK. Por eso el
+juego recibe el origen de recursos desde fuera (`MuGame(Func<IAssetSource?>)`):
+el escritorio usa `DataLocator` y Android usa el paquete.
+
+Dentro de un APK los recursos se leen de uno en uno y sin poder listarlos como
+ficheros, así que primero se recorre el árbol y luego se abre cada uno por su
+nombre real. `AssetIndex` hace esa traducción entre el nombre que pide el juego
+y el que hay de verdad, ignorando mayúsculas, y es lo que comparten
+`FileAssetSource` y `AndroidAssetSource`.
+
+El mundo 1 con el personaje y seis monstruos necesita 258 ficheros y 9 MB. El
+resto de mundos se pueden añadir pasando una carpeta más completa.
+
+## Texto en pantalla
+
+El proyecto no usa el empaquetador de contenido de MonoGame, así que no hay
+`SpriteFont`. `BitmapFont` define las letras como mapas de bits y
+`OverlayRenderer` las pinta con una textura de un píxel. Sirve para enseñar los
+avisos de fallo, que en un móvil no se pueden ver de otra forma; también se
+escriben en la salida de error, que en Android acaba en el registro del sistema.
