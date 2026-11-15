@@ -39,8 +39,17 @@ public sealed class TextRenderer : IDisposable
     /// <summary>Alto de cada letra, en píxeles.</summary>
     public static int GlyphHeight => BitmapFont.Height;
 
-    /// <summary>Empieza a dibujar el fotograma. Todo lo que se pinte debe ir entre esto y <see cref="End"/>.</summary>
-    public void Begin()
+    /// <summary>
+    /// Empieza a dibujar el fotograma. Todo lo que se pinte debe ir entre esto y
+    /// <see cref="End"/>. Lo que se dibuje se da en coordenadas del lienzo: aquí
+    /// se aplica la escala que lo coloca en la pantalla del móvil, así que las
+    /// pantallas no tienen que saber de qué tamaño es el teléfono.
+    /// </summary>
+    /// <param name="smooth">
+    /// Cierto para suavizar al agrandar (el mundo, que es una imagen). Falso para
+    /// mantener el texto nítido.
+    /// </param>
+    public void Begin(bool smooth = false)
     {
         if (_drawing)
         {
@@ -51,7 +60,14 @@ public sealed class TextRenderer : IDisposable
         // prueba de profundidad: si no, las barras y los botones se colarían
         // detrás del terreno.
         _batch.GraphicsDevice.DepthStencilState = DepthStencilState.None;
-        _batch.Begin(samplerState: SamplerState.PointClamp, blendState: BlendState.AlphaBlend);
+
+        var viewport = _batch.GraphicsDevice.Viewport;
+        var transform = VirtualCanvas.Transform(viewport.Width, viewport.Height);
+
+        _batch.Begin(
+            samplerState: smooth ? SamplerState.LinearClamp : SamplerState.PointClamp,
+            blendState: BlendState.AlphaBlend,
+            transformMatrix: transform);
         _drawing = true;
     }
 

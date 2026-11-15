@@ -86,13 +86,6 @@ public sealed class GameScene : Scene
     {
         _source = Host.OpenAssets();
         _cache = new ModelCache(Host.Device);
-        _canvas = new RenderTarget2D(
-            Host.Device,
-            VirtualCanvas.Width,
-            VirtualCanvas.Height,
-            false,
-            SurfaceFormat.Color,
-            DepthFormat.Depth24);
 
         if (_source is null)
         {
@@ -101,6 +94,31 @@ public sealed class GameScene : Scene
         }
 
         LoadWorld(Worlds[_worldIndex]);
+    }
+
+    /// <summary>
+    /// Prepara el lienzo del mundo con el tamaño de ahora. Se comprueba cada
+    /// fotograma porque el tamaño de la pantalla puede cambiar (al girar el
+    /// móvil), y el lienzo del mundo tiene que seguirle.
+    /// </summary>
+    private void EnsureCanvas()
+    {
+        var device = Host.Device;
+        if (_canvas is not null &&
+            _canvas.Width == VirtualCanvas.Width &&
+            _canvas.Height == VirtualCanvas.Height)
+        {
+            return;
+        }
+
+        _canvas?.Dispose();
+        _canvas = new RenderTarget2D(
+            device,
+            VirtualCanvas.Width,
+            VirtualCanvas.Height,
+            false,
+            SurfaceFormat.Color,
+            DepthFormat.Depth24);
     }
 
     public override void Unload()
@@ -455,6 +473,7 @@ public sealed class GameScene : Scene
     public override void Draw(InputState input)
     {
         var device = Host.Device;
+        EnsureCanvas();
         device.SetRenderTarget(_canvas);
         device.Clear(new Color(10, 12, 18));
 
@@ -480,8 +499,11 @@ public sealed class GameScene : Scene
 
         if (_canvas is not null)
         {
-            Host.Text.Begin();
-            Host.Text.Texture(_canvas, VirtualCanvas.Destination(device.Viewport.Width, device.Viewport.Height));
+            // El lienzo se pega tal cual (ocupa todo el lienzo virtual) y es la
+            // transformación la que lo agranda a la pantalla; por eso se pide
+            // suavizado, que aquí sí conviene.
+            Host.Text.Begin(smooth: true);
+            Host.Text.Texture(_canvas, new Rectangle(0, 0, VirtualCanvas.Width, VirtualCanvas.Height));
             Host.Text.End();
         }
 

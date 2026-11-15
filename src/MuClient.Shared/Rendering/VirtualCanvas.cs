@@ -1,64 +1,76 @@
 using Microsoft.Xna.Framework;
+using Mu.Core.Rendering;
 
 namespace Mu.Client.Rendering;
 
 /// <summary>
-/// El lienzo sobre el que se dibuja el juego. Siempre mide lo mismo, así que el
-/// mundo se ve igual en cualquier pantalla: al final se coloca en el móvil
-/// conservando la proporción y con barras negras donde no llega. Sin esto, el
-/// contenido de 16:9 se estiraba a pantallas más alargadas y todo salía deformado.
+/// El lienzo sobre el que se dibuja el juego. Todas las pantallas se pintan
+/// siempre sobre este lienzo (alto fijo de 720 píxeles, ancho según la forma de
+/// la pantalla) y luego se coloca escalado en el móvil: así ningún panel sale
+/// diminuto ni deformado, dé igual el tamaño del teléfono.
+///
+/// El tamaño se ajusta al arrancar y cada vez que la pantalla cambia de tamaño
+/// (en Android la superficie real puede conocerse un poco después), siempre
+/// antes de dibujar. A partir de ahí solo se lee. Las cuentas están en
+/// <see cref="VirtualCanvasLayout"/>, que no depende de MonoGame y por eso se
+/// puede probar.
 /// </summary>
 public static class VirtualCanvas
 {
     /// <summary>Ancho del lienzo, en píxeles.</summary>
-    public const int Width = 1280;
+    public static int Width { get; private set; } = VirtualCanvasLayout.DefaultWidth;
 
     /// <summary>Alto del lienzo, en píxeles.</summary>
-    public const int Height = 720;
+    public static int Height { get; private set; } = VirtualCanvasLayout.Height;
 
     /// <summary>Proporción del lienzo, que es la que usa la cámara siempre.</summary>
-    public const float Aspect = (float)Width / Height;
+    public static float Aspect => Width / (float)Height;
 
     /// <summary>
-    /// Dónde se coloca el lienzo dentro de una pantalla. Si la pantalla es más
-    /// alargada que el lienzo quedan barras a los lados; si es más cuadrada,
-    /// arriba y abajo. La matemática está aparte del dibujo para poder probarla.
+    /// Ajusta el lienzo a la forma de la pantalla. Se llama una vez, al arrancar
+    /// y cada vez que cambia el tamaño de la ventana, siempre antes de dibujar.
     /// </summary>
+    /// <param name="screenWidth">Ancho de la pantalla, en píxeles.</param>
+    /// <param name="screenHeight">Alto de la pantalla, en píxeles.</param>
+    public static void Configure(int screenWidth, int screenHeight)
+    {
+        var size = VirtualCanvasLayout.Choose(screenWidth, screenHeight);
+        Width = size.Width;
+        Height = size.Height;
+    }
+
+    /// <summary>Dónde se coloca el lienzo dentro de una pantalla.</summary>
     /// <param name="screenWidth">Ancho de la pantalla, en píxeles.</param>
     /// <param name="screenHeight">Alto de la pantalla, en píxeles.</param>
     public static Rectangle Destination(int screenWidth, int screenHeight)
     {
-        if (screenWidth <= 0 || screenHeight <= 0)
-        {
-            return new Rectangle(0, 0, Width, Height);
-        }
-
-        var scale = MathF.Min(screenWidth / (float)Width, screenHeight / (float)Height);
-        var width = Math.Max(1, (int)MathF.Round(Width * scale));
-        var height = Math.Max(1, (int)MathF.Round(Height * scale));
-
-        return new Rectangle((screenWidth - width) / 2, (screenHeight - height) / 2, width, height);
+        var placement = VirtualCanvasLayout.Place(Width, Height, screenWidth, screenHeight);
+        return new Rectangle(placement.X, placement.Y, placement.Width, placement.Height);
     }
 
-    /// <summary>
-    /// Pasa un punto de la pantalla a coordenadas del lienzo. Hace falta porque
-    /// el dedo llega en píxeles de la pantalla del móvil, y los botones se
-    /// dibujan en el lienzo: sin esto, los toques caerían donde no se ven.
-    /// </summary>
+    /// <summary>Pasa un punto de la pantalla a coordenadas del lienzo.</summary>
     /// <param name="x">Coordenada X en la pantalla.</param>
     /// <param name="y">Coordenada Y en la pantalla.</param>
     /// <param name="screenWidth">Ancho de la pantalla, en píxeles.</param>
     /// <param name="screenHeight">Alto de la pantalla, en píxeles.</param>
-    public static Vector2 ToCanvas(float x, float y, int screenWidth, int screenHeight)
-    {
-        var destination = Destination(screenWidth, screenHeight);
-        if (destination.Width <= 0 || destination.Height <= 0)
-        {
-            return Vector2.Zero;
-        }
+    public static Vector2 ToCanvas(float x, float y, int screenWidth, int screenHeight) =>
+        VirtualCanvasLayout.ToCanvas(x, y, Width, Height, screenWidth, screenHeight);
 
-        return new Vector2(
-            (x - destination.X) * Width / destination.Width,
-            (y - destination.Y) * Height / destination.Height);
+    /// <summary>
+    /// La matriz que coloca el lienzo en la pantalla: lleva lo que se dibuja en
+    /// coordenadas del lienzo a los píxeles del móvil, escalado por igual en los
+    /// dos ejes. Es lo que hace que el interfaz ocupe toda la pantalla en vez de
+    /// salir en una esquina.
+    /// </summary>
+    /// <param name="screenWidth">Ancho de la pantalla, en píxeles.</param>
+    /// <param name="screenHeight">Alto de la pantalla, en píxeles.</param>
+    public static Matrix Transform(int screenWidth, int screenHeight)
+    {
+        var placement = VirtualCanvasLayout.Place(Width, Height, screenWidth, screenHeight);
+        var scaleX = placement.Width / (float)Width;
+        var scaleY = placement.Height / (float)Height;
+
+        return Matrix.CreateScale(scaleX, scaleY, 1f)
+            * Matrix.CreateTranslation(placement.X, placement.Y, 0f);
     }
 }

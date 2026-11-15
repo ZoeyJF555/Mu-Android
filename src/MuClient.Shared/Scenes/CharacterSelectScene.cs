@@ -110,17 +110,18 @@ public sealed class CharacterSelectScene : Scene
     /// <summary>El recuadro de un espacio de personaje.</summary>
     public static Rectangle SlotBox(int slot)
     {
-        const int width = 320;
-        const int height = 170;
-        var total = (width * ProfileStore.SlotCount) + (24 * (ProfileStore.SlotCount - 1));
+        var height = 200;
+        var gap = 24;
+        var total = Math.Min(VirtualCanvas.Width - 120, 1100);
+        var width = (total - (gap * (ProfileStore.SlotCount - 1))) / ProfileStore.SlotCount;
         var left = (VirtualCanvas.Width - total) / 2;
-        return new Rectangle(left + (slot * (width + 24)), (VirtualCanvas.Height / 2) - (height / 2), width, height);
+        return new Rectangle(left + (slot * (width + gap)), (VirtualCanvas.Height / 2) - (height / 2) - 20, width, height);
     }
 
     /// <summary>El botón de borrar de un espacio ocupado.</summary>
     public static Rectangle DeleteButton(int slot)
     {
         var box = SlotBox(slot);
-        return new Rectangle(box.Right - 116, box.Bottom - 46, 96, 32);
+        return new Rectangle(box.Right - 128, box.Bottom - 52, 108, 36);
     }
 }
