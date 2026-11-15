@@ -71,6 +71,20 @@ public sealed class OverlayRenderer : IDisposable
         _batch.End();
     }
 
+    /// <summary>
+    /// Copia a la pantalla una imagen ya dibujada, estirada al rectángulo que se
+    /// indique. Se usa para volcar el lienzo del juego conservando la proporción,
+    /// que es lo que evita que se vea deformado en pantallas alargadas.
+    /// </summary>
+    public void DrawTexture(Texture2D texture, Rectangle destination)
+    {
+        ArgumentNullException.ThrowIfNull(texture);
+
+        _batch.Begin(samplerState: SamplerState.LinearClamp);
+        _batch.Draw(texture, destination, Color.White);
+        _batch.End();
+    }
+
     /// <summary>Dibuja un rectángulo relleno.</summary>
     public void DrawBox(Rectangle rectangle, Color color)
     {

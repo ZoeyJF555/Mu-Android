@@ -26,6 +26,12 @@ public sealed class MuGame : Game
     /// <summary>Acción de caminar del esqueleto del personaje.</summary>
     private const int WalkingAction = (int)PlayerAction.WalkMale;
 
+    /// <summary>Acción de ataque con espada, la que usa el personaje de muestra.</summary>
+    private const int AttackAction = (int)PlayerAction.AttackSwordRight1;
+
+    /// <summary>Cuánto dura el golpe, en segundos.</summary>
+    private const float AttackSeconds = 0.6f;
+
     /// <summary>Arma que lleva el personaje en la mano derecha.</summary>
     private const string StartWeapon = "Item/Sword01.bmd";
 
@@ -55,6 +61,9 @@ public sealed class MuGame : Game
     private string? _message;
     private readonly WorldSelection _worlds = new();
     private KeyboardState _previousKeyboard;
+    private RenderTarget2D? _canvas;
+    private float _attackLeft;
+    private bool _showOptions;
 
     /// <summary>
     /// Crea el juego buscando los datos en el disco, que es lo que hace el
@@ -90,8 +99,18 @@ public sealed class MuGame : Game
     {
         Window.Title = "Mu Android";
         Window.AllowUserResizing = true;
+        Window.ClientSizeChanged += (_, _) => OnClientSizeChanged();
         _worlds.StartAt(ReadStartWorld());
         base.Initialize();
+    }
+
+    /// <summary>
+    /// Ajusta la vista cuando cambia el tamaño de la pantalla, que en Android
+    /// pasa al girar el móvil o al entrar y salir de pantalla completa.
+    /// </summary>
+    private void OnClientSizeChanged()
+    {
+        _graphics.ApplyChanges();
     }
 
     /// <summary>El mundo pedido por el entorno; si no vale, el de por defecto.</summary>
@@ -104,6 +123,13 @@ public sealed class MuGame : Game
     protected override void LoadContent()
     {
         _overlay = new OverlayRenderer(GraphicsDevice);
+        _canvas = new RenderTarget2D(
+            GraphicsDevice,
+            VirtualCanvas.Width,
+            VirtualCanvas.Height,
+            false,
+            SurfaceFormat.Color,
+            DepthFormat.Depth24);
         LoadWorld();
         base.LoadContent();
     }
@@ -217,27 +243,51 @@ public sealed class MuGame : Game
 
         var seconds = (float)gameTime.ElapsedGameTime.TotalSeconds;
         var touch = ReadTouches();
-        _touch.Update(touch, GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
+        _touch.Update(touch, VirtualCanvas.Width, VirtualCanvas.Height);
 
         UpdateWorldSelection(keyboard);
         UpdateCamera(keyboard, seconds);
         UpdateCharacter(keyboard, seconds);
+        UpdateAttack(seconds);
         _previousKeyboard = keyboard;
         base.Update(gameTime);
     }
 
-    /// <summary>Los dedos apoyados en la pantalla ahora mismo, en píxeles.</summary>
-    private static TouchPoint[] ReadTouches()
+    /// <summary>Los dedos apoyados ahora mismo, traducidos al lienzo del juego.</summary>
+    private TouchPoint[] ReadTouches()
     {
         var state = TouchPanel.GetState();
         var points = new TouchPoint[state.Count];
+        var width = GraphicsDevice.Viewport.Width;
+        var height = GraphicsDevice.Viewport.Height;
+
         for (var index = 0; index < state.Count; index++)
         {
             var location = state[index];
-            points[index] = new TouchPoint(location.Id, location.Position.X, location.Position.Y);
+            var canvasPoint = VirtualCanvas.ToCanvas(location.Position.X, location.Position.Y, width, height);
+            points[index] = new TouchPoint(location.Id, canvasPoint.X, canvasPoint.Y);
         }
 
         return points;
+    }
+
+    /// <summary>Arranca el golpe al tocar el botón de ataque y lo mantiene un momento.</summary>
+    private void UpdateAttack(float seconds)
+    {
+        if (_touch.Options)
+        {
+            _showOptions = !_showOptions;
+        }
+
+        if (_touch.Attack)
+        {
+            _attackLeft = AttackSeconds;
+        }
+
+        if (_attackLeft > 0f)
+        {
+            _attackLeft = MathF.Max(0f, _attackLeft - seconds);
+        }
     }
 
     /// <summary>Cambia de mapa con AvPág (siguiente) y RePág (anterior), o con los botones.</summary>
@@ -339,7 +389,10 @@ public sealed class MuGame : Game
 
         if (_renderer.Character is not null)
         {
-            _renderer.Character.Action = forward != 0f ? WalkingAction : 0;
+            // El golpe manda sobre caminar: mientras dura, se ve el ataque.
+            _renderer.Character.Action = _attackLeft > 0f
+                ? AttackAction
+                : forward != 0f ? WalkingAction : 0;
         }
 
         _camera.Target = new System.Numerics.Vector3(position.X, position.Y + 2f, position.Z);
@@ -347,16 +400,33 @@ public sealed class MuGame : Game
 
     protected override void Draw(GameTime gameTime)
     {
+        // Se dibuja siempre al mismo lienzo de 16:9, con la cámara fija en esa
+        // proporción, para que el mundo no se deforme en pantallas alargadas.
+        GraphicsDevice.SetRenderTarget(_canvas);
         GraphicsDevice.Clear(new Color(10, 12, 18));
 
         if (_renderer is not null)
         {
-            var aspect = GraphicsDevice.Viewport.AspectRatio;
-            _camera.Update(aspect <= 0f ? 16f / 9f : aspect);
+            _camera.Update(VirtualCanvas.Aspect);
             _renderer.Draw(_camera, (float)gameTime.ElapsedGameTime.TotalSeconds);
         }
 
         DrawInterface();
+
+        GraphicsDevice.SetRenderTarget(null);
+
+        // Se vuelca el lienzo a la pantalla conservando la proporción: lo que
+        // sobre queda en negro, como las barras de una película.
+        GraphicsDevice.Clear(Color.Black);
+        if (_canvas is not null && _overlay is not null)
+        {
+            _overlay.DrawTexture(
+                _canvas,
+                VirtualCanvas.Destination(
+                    GraphicsDevice.Viewport.Width,
+                    GraphicsDevice.Viewport.Height));
+        }
+
         base.Draw(gameTime);
     }
 
@@ -368,8 +438,10 @@ public sealed class MuGame : Game
             return;
         }
 
-        var width = GraphicsDevice.Viewport.Width;
-        var height = GraphicsDevice.Viewport.Height;
+        // Todo se mide sobre el lienzo, que es donde se dibuja: los toques ya
+        // vienen traducidos a estas mismas coordenadas.
+        var width = VirtualCanvas.Width;
+        var height = VirtualCanvas.Height;
 
         if (_message is not null)
         {
@@ -394,6 +466,28 @@ public sealed class MuGame : Game
 
         DrawButton(TouchControls.MapPreviousButton(width, height), "-");
         DrawButton(TouchControls.MapNextButton(width, height), "+");
+        DrawButton(TouchControls.AttackButton(width, height), "A");
+        DrawButton(TouchControls.OptionsButton(width, height), "O");
+
+        if (_showOptions)
+        {
+            DrawOptions();
+        }
+    }
+
+    /// <summary>El panel de opciones, que se abre con el botón "O".</summary>
+    private void DrawOptions()
+    {
+        var box = new Rectangle(
+            (VirtualCanvas.Width / 2) - 220,
+            (VirtualCanvas.Height / 2) - 90,
+            440,
+            180);
+
+        _overlay!.DrawBox(box, new Color(0, 0, 0, 220));
+        _overlay.DrawText("OPCIONES", new Point(box.X + 24, box.Y + 24), 3);
+        _overlay.DrawText($"MAPA {_worlds.Current}", new Point(box.X + 24, box.Y + 70), 2);
+        _overlay.DrawText("TOQUE O PARA CERRAR", new Point(box.X + 24, box.Y + 110), 2);
     }
 
     private void DrawButton(Rectangle rectangle, string label)
@@ -410,6 +504,7 @@ public sealed class MuGame : Game
     {
         _renderer?.Dispose();
         _overlay?.Dispose();
+        _canvas?.Dispose();
         base.UnloadContent();
     }
 }
