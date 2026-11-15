@@ -98,7 +98,31 @@ public static class BitmapFont
 
     /// <summary>Cierto si la letra tiene dibujo propio.</summary>
     public static bool CanDraw(char character) =>
-        Glyphs.ContainsKey(StripAccent(char.ToUpperInvariant(character)));
+        Glyphs.ContainsKey(Normalize(character));
+
+    /// <summary>Las letras que tienen dibujo, para construir un atlas con ellas.</summary>
+    public static IReadOnlyCollection<char> Characters => Glyphs.Keys;
+
+    /// <summary>
+    /// La letra con la que se dibuja otra: en mayúsculas y sin acento, porque la
+    /// fuente solo tiene esas. Las que no existen se dibujan como un interrogante.
+    /// </summary>
+    public static char Normalize(char character)
+    {
+        var plain = StripAccent(char.ToUpperInvariant(character));
+        return Glyphs.ContainsKey(plain) ? plain : '?';
+    }
+
+    /// <summary>
+    /// El dibujo de una letra, en siete filas de cinco bits, o null si no la hay.
+    /// Se usa para montar la fuente como textura en vez de pintar píxel a píxel,
+    /// que en el móvil sería demasiado lento.
+    /// </summary>
+    public static byte[]? TryGetGlyph(char character)
+    {
+        var upper = char.ToUpperInvariant(character);
+        return Glyphs.TryGetValue(StripAccent(upper), out var glyph) ? glyph : null;
+    }
 
     /// <summary>Ancho que ocupa un texto, en píxeles.</summary>
     public static int MeasureWidth(string text, int scale = 1)

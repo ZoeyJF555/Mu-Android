@@ -13,6 +13,12 @@ public static class DataLocator
     /// <summary>Variable de entorno con la ruta a los datos.</summary>
     public const string EnvironmentVariable = "MU_DATA";
 
+    /// <summary>Variable de entorno con la carpeta donde se guarda el perfil.</summary>
+    public const string ProfileEnvironmentVariable = "MU_PROFILE";
+
+    /// <summary>Nombre del fichero donde se guarda la cuenta y los personajes.</summary>
+    public const string ProfileFileName = "profile.json";
+
     /// <summary>Nombre de la carpeta de datos que se busca junto al ejecutable.</summary>
     public const string FolderName = "Data";
 
@@ -40,5 +46,21 @@ public static class DataLocator
         };
 
         return candidates.Select(Path.GetFullPath).FirstOrDefault(Directory.Exists);
+    }
+
+    /// <summary>
+    /// Dónde se guarda el perfil. En el móvil, Android pasa su carpeta de datos
+    /// en <see cref="ProfileEnvironmentVariable"/>; en escritorio, si no se dice
+    /// nada, se usa una carpeta junto al ejecutable.
+    /// </summary>
+    public static string ProfilePath()
+    {
+        var folder = Environment.GetEnvironmentVariable(ProfileEnvironmentVariable);
+        if (string.IsNullOrWhiteSpace(folder))
+        {
+            folder = Path.Combine(AppContext.BaseDirectory, "Profile");
+        }
+
+        return Path.Combine(folder, ProfileFileName);
     }
 }
