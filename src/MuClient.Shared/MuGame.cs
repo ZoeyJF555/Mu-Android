@@ -15,9 +15,6 @@ namespace Mu.Client;
 /// </summary>
 public sealed class MuGame : Game
 {
-    /// <summary>Mundo que se carga al arrancar (1 = Lorencia).</summary>
-    private const int StartWorld = 1;
-
     /// <summary>Clase del personaje (1 = mago oscuro, 2 = caballero...).</summary>
     private const int StartClass = 1;
 
@@ -32,14 +29,6 @@ public sealed class MuGame : Game
 
     /// <summary>Variable de entorno para elegir el mundo inicial sin recompilar.</summary>
     private const string WorldEnvironmentVariable = "MU_WORLD";
-
-    /// <summary>Mundos que se pueden recorrer con las teclas de cambio de mapa.</summary>
-    private static readonly int[] PlayableWorlds =
-    [
-        1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 19, 25, 31, 32, 34, 35, 38, 39, 40,
-        41, 42, 43, 47, 52, 57, 58, 59, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72,
-        73, 74, 75, 78, 79, 80, 81, 82,
-    ];
 
     /// <summary>Monstruos que se reparten por el mapa como muestra.</summary>
     private static readonly string[] SampleMonsters =
@@ -59,7 +48,7 @@ public sealed class MuGame : Game
     private WorldRenderer? _renderer;
     private readonly Camera _camera = new();
     private string? _message;
-    private int _worldNumber = StartWorld;
+    private readonly WorldSelection _worlds = new();
     private KeyboardState _previousKeyboard;
 
     public MuGame()
@@ -79,15 +68,15 @@ public sealed class MuGame : Game
     {
         Window.Title = "Mu Android";
         Window.AllowUserResizing = true;
-        _worldNumber = ReadStartWorld();
+        _worlds.StartAt(ReadStartWorld());
         base.Initialize();
     }
 
-    /// <summary>El mundo pedido por el entorno, si es uno de los que se pueden cargar.</summary>
+    /// <summary>El mundo pedido por el entorno; si no vale, el de por defecto.</summary>
     private static int ReadStartWorld()
     {
         var text = Environment.GetEnvironmentVariable(WorldEnvironmentVariable);
-        return int.TryParse(text, out var world) && PlayableWorlds.Contains(world) ? world : StartWorld;
+        return int.TryParse(text, out var world) ? world : WorldSelection.Default;
     }
 
     protected override void LoadContent()
@@ -114,17 +103,17 @@ public sealed class MuGame : Game
 
         try
         {
-            _world = WorldLoader.Load(_source, _worldNumber);
+            _world = WorldLoader.Load(_source, _worlds.Current);
             _renderer = new WorldRenderer(GraphicsDevice, _world);
             _renderer.Character = LoadCharacter(_source);
             _renderer.CharacterPosition = new Vector3(128f, 0f, 128f);
             SpawnMonsters(_source);
             _camera.Target = new System.Numerics.Vector3(128f, 2f, 128f);
-            Window.Title = $"Mu Android — mundo {_worldNumber}";
+            Window.Title = $"Mu Android — mundo {_worlds.Current}";
         }
         catch (Exception error) when (error is IOException or InvalidDataException)
         {
-            _message = $"No se pudo cargar el mundo {_worldNumber}: {error.Message}";
+            _message = $"No se pudo cargar el mundo {_worlds.Current}: {error.Message}";
         }
     }
 
@@ -204,12 +193,6 @@ public sealed class MuGame : Game
     /// <summary>Cambia de mapa con AvPág (siguiente) y RePág (anterior).</summary>
     private void UpdateWorldSelection(KeyboardState keyboard)
     {
-        var index = Array.IndexOf(PlayableWorlds, _worldNumber);
-        if (index < 0)
-        {
-            index = 0;
-        }
-
         var step = 0;
         if (Pressed(keyboard, Keys.PageDown))
         {
@@ -222,8 +205,7 @@ public sealed class MuGame : Game
 
         if (step != 0)
         {
-            index = ((index + step) % PlayableWorlds.Length + PlayableWorlds.Length) % PlayableWorlds.Length;
-            _worldNumber = PlayableWorlds[index];
+            _worlds.Advance(step);
             LoadWorld();
         }
     }
