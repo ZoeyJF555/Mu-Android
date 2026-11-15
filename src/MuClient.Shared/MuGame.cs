@@ -155,9 +155,9 @@ public sealed class MuGame : Game
             _world = WorldLoader.Load(_source, _worlds.Current);
             _renderer = new WorldRenderer(GraphicsDevice, _world);
             _renderer.Character = LoadCharacter(_source);
-            _renderer.CharacterPosition = new Vector3(128f, 0f, 128f);
+            _renderer.CharacterPosition = new Vector3(128f, GroundHeight(128f, 128f), 128f);
             SpawnMonsters(_source);
-            _camera.Target = new System.Numerics.Vector3(128f, 2f, 128f);
+            _camera.Target = new System.Numerics.Vector3(128f, GroundHeight(128f, 128f) + 2f, 128f);
             Window.Title = $"Mu Android — mundo {_worlds.Current}";
         }
         catch (Exception error) when (error is IOException or InvalidDataException)
@@ -176,6 +176,13 @@ public sealed class MuGame : Game
         Console.Error.WriteLine($"[Mu] {message}");
     }
 
+    /// <summary>
+    /// Altura del suelo en un punto del mapa, para apoyar sobre él al personaje
+    /// y a los monstruos. Sin mundo cargado devuelve cero.
+    /// </summary>
+    private float GroundHeight(float x, float z) =>
+        _world is null ? 0f : TerrainHeightSampler.Sample(_world.Heights, x, z);
+
     /// <summary>Reparte los monstruos de muestra alrededor del punto de partida.</summary>
     private void SpawnMonsters(IAssetSource source)
     {
@@ -192,6 +199,7 @@ public sealed class MuGame : Game
                 128f + (MathF.Cos(angle) * radius),
                 0f,
                 128f + (MathF.Sin(angle) * radius));
+            position.Y = GroundHeight(position.X, position.Z);
 
             if (LoadMonster(source, SampleMonsters[i], position, angle * 180f / MathF.PI) is { } monster)
             {
@@ -384,6 +392,7 @@ public sealed class MuGame : Game
             var heading = _renderer.CharacterHeadingDegrees * MathF.PI / 180f;
             position += new Vector3(
                 MathF.Cos(heading), 0f, MathF.Sin(heading)) * (forward * MoveSpeed * seconds);
+            position.Y = GroundHeight(position.X, position.Z);
             _renderer.CharacterPosition = position;
         }
 

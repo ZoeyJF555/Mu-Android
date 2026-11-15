@@ -60,6 +60,11 @@ redistribuyas sin permiso.
 - El jugador sí se ensambla por partes (`CharacterAssembler`), porque su
   esqueleto vive en `Player/player.bmd` y el equipo son ficheros aparte.
 - Las armas y escudos se cuelgan de los huesos `Bip01 R Hand` / `Bip01 L Hand`.
+- La cámara y los actores siguen al cliente original `bhrama-br/muonline-android`:
+  distancia 1700 y campo de visión 35 grados (`Camera`), y los personajes se
+  apoyan sobre el suelo con `TerrainHeightSampler`, que interpola la altura de
+  las cuatro casillas que rodean el punto. Sin eso quedan hundidos, porque el
+  terreno de Lorencia no está a cero en el punto de partida (está a 1,65).
 
 ## Recursos del cliente web
 

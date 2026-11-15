@@ -25,6 +25,9 @@ public sealed class WorldAssets
     /// <summary>La geometría del terreno.</summary>
     public required TerrainMesh Terrain { get; init; }
 
+    /// <summary>Altura del suelo de cada casilla, para apoyar a los personajes.</summary>
+    public required float[] Heights { get; init; }
+
     /// <summary>La textura del suelo ya horneada.</summary>
     public required DecodedImage GroundTexture { get; init; }
 
@@ -82,6 +85,7 @@ public static class WorldLoader
         {
             World = world,
             Terrain = TerrainMeshBuilder.Build(heights, attributes, light),
+            Heights = heights,
             GroundTexture = ground,
             Objects = objects,
             ObjectModels = models,
