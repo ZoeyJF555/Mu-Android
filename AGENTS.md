@@ -23,8 +23,9 @@ escritorio y en Android; todo lo específico de cada plataforma vive en
 - `src/MuClient.Shared/` — el juego compartido: `MuGame` (bucle, toques y lienzo
   virtual), `Scenes/` (una pantalla por fichero: `LoginScene`,
   `CharacterSelectScene`, `CharacterCreateScene`, `GameScene`, unidas por
-  `GameHost`), `Ui/` (`Theme`, `InputState`, `TextInput`, `Hud`) y `Rendering/`
-  (texto, mundo y personajes, con `ModelCache` compartiendo mallas).
+  `GameHost`), `Ui/` (`Theme`, `InputState`, `TextInput`, `KeyboardPanel`, `Hud`)
+  y `Rendering/` (texto, lienzo virtual, mundo y personajes, con `ModelCache`
+  compartiendo mallas).
 - `tests/MuCore.Tests/` — pruebas de xUnit de la lógica pura, sin GPU.
 - `tools/AssetFetcher/` — descarga los recursos publicados por el cliente web.
 
@@ -49,6 +50,9 @@ MU_DATA=/ruta/al/Data MU_PROFILE=/tmp/perfil MU_SMOKE=1 \
 ```
 
 `MU_SMOKE_SCENE` admite `game` (por defecto), `login`, `select` y `create`.
+`MU_WINDOW=ANCHOxALTO` simula la forma de un teléfono (por ejemplo `2340x1080`)
+y `MU_SMOKE_TYPE=TEXTO` escribe ese texto con toques falsos sobre el teclado en
+pantalla, para comprobar la escritura sin dedo.
 
 ## Los datos del cliente no están en el repositorio
 
@@ -155,6 +159,30 @@ dígitos y signos) y `TextRenderer` las pinta con una textura de un píxel, con
 de profundidad para que quede siempre encima del mundo. Los avisos de fallo
 también se escriben en la salida de error, que en Android acaba en el registro
 del sistema.
+
+## Lienzo virtual y escalado
+
+Las pantallas no dibujan sobre el backbuffer: dibujan sobre un lienzo virtual de
+alto fijo 720 y ancho según la forma de la pantalla, y `MuGame` coloca ese
+lienzo escalado encima (matriz de `VirtualCanvas.Transform`). Así el interfaz
+llena cualquier teléfono sin deformarse ni salir en una esquina. Las cuentas
+están en `MuCore/Rendering/VirtualCanvasLayout` (puro, probado) y la parte de
+MonoGame en `MuClient.Shared/Rendering/VirtualCanvas`; los toques se traducen al
+lienzo con `VirtualCanvas.ToCanvas`.
+
+El lienzo se reajusta cada fotograma (`MuGame.RefreshCanvasIfNeeded`), porque en
+Android el tamaño real de la superficie puede conocerse después de `Initialize`
+(el log del emulador lo confirma con `ResetClientBounds`). Al añadir una pantalla
+nueva hay que dibujarla en coordenadas del lienzo, nunca en píxeles de pantalla.
+
+## Teclado en pantalla
+
+MonoGame 3.8.6 para Android no expone ninguna API para abrir el teclado del
+sistema (comprobado inspeccionando el DLL), así que el juego dibuja el suyo:
+`MuCore/Rendering/OnScreenKeyboard` coloca las teclas (puro, probado) y
+`MuClient.Shared/Ui/KeyboardPanel` lo pinta y lee los toques. `TextInput` ya no
+dibuja nada; solo guarda el texto. El formulario de login se coloca con
+`OnScreenKeyboard.FormArea`, que garantiza que nunca pisa el teclado.
 
 ## Pruebas
 
