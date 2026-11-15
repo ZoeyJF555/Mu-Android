@@ -3,16 +3,16 @@ using System.Collections.Concurrent;
 namespace Mu.Core.Assets;
 
 /// <summary>
-/// Resuelve rutas dentro del directorio de datos del cliente. Los ficheros del
-/// juego se referencian con nombres de Windows, así que la búsqueda es
-/// insensible a mayúsculas también en Linux y Android.
+/// Un origen de recursos que lee de una carpeta del disco. Los ficheros del
+/// juego usan nombres de Windows, así que la búsqueda es insensible a
+/// mayúsculas también en Linux y Android.
 /// </summary>
-public sealed class AssetStore
+public sealed class FileAssetSource : IAssetSource
 {
     private readonly ConcurrentDictionary<string, string> _resolved = new(StringComparer.OrdinalIgnoreCase);
     private readonly Lazy<Dictionary<string, string>> _index;
 
-    public AssetStore(string root)
+    public FileAssetSource(string root)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(root);
         Root = Path.GetFullPath(root);
@@ -22,43 +22,44 @@ public sealed class AssetStore
     /// <summary>Directorio raíz de los datos del cliente.</summary>
     public string Root { get; }
 
-    /// <summary>Devuelve la ruta real de un recurso o lanza si no existe.</summary>
-    public string GetRequired(string relativePath)
+    /// <inheritdoc />
+    public byte[]? Read(string relativePath)
     {
-        if (TryResolve(relativePath, out var fullPath))
-        {
-            return fullPath;
-        }
-
-        throw new FileNotFoundException(
-            $"No se encontró el recurso '{relativePath}' dentro de '{Root}'.", relativePath);
+        var path = Resolve(relativePath);
+        return path is null ? null : File.ReadAllBytes(path);
     }
 
-    /// <summary>Intenta resolver un recurso sin lanzar excepción.</summary>
-    public bool TryResolve(string relativePath, out string fullPath)
+    /// <inheritdoc />
+    public bool Exists(string relativePath) => Resolve(relativePath) is not null;
+
+    /// <inheritdoc />
+    public IEnumerable<string> Enumerate(string prefix)
+    {
+        var normalized = Normalize(prefix);
+        return _index.Value.Keys
+            .Where(key => key.StartsWith(normalized, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(key => key, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private string? Resolve(string relativePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
 
         var normalized = Normalize(relativePath);
         if (_resolved.TryGetValue(normalized, out var cached))
         {
-            fullPath = cached;
-            return true;
+            return cached;
         }
 
         var candidate = Path.Combine(Root, normalized);
         if (File.Exists(candidate))
         {
-            fullPath = candidate;
             _resolved[normalized] = candidate;
-            return true;
+            return candidate;
         }
 
-        return _index.Value.TryGetValue(normalized, out fullPath!);
+        return _index.Value.TryGetValue(normalized, out var indexed) ? indexed : null;
     }
-
-    /// <summary>Abre un recurso para lectura.</summary>
-    public Stream OpenRead(string relativePath) => File.OpenRead(GetRequired(relativePath));
 
     private Dictionary<string, string> BuildIndex()
     {

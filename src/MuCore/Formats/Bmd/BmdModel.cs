@@ -39,7 +39,7 @@ public sealed class BmdTriangle
     public required short LightMapIndex { get; init; }
 
     /// <summary>Número real de esquinas de la cara (3 o 4).</summary>
-    public int CornerCount => Polygon + 1;
+    public int CornerCount => Polygon;
 }
 
 /// <summary>Animación declarada en el fichero.</summary>
