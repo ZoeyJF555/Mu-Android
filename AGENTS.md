@@ -16,8 +16,16 @@ escritorio y en Android; todo lo específico de cada plataforma vive en
   - `World/` — carga de un mundo completo (`WorldLoader`) y de actores
     animados (`SkinnedModelLoader`, `CharacterLoader`).
   - `Rendering/` — construcción de mallas (`TerrainMeshBuilder`,
-    `SkinnedMeshBuilder`).
-- `src/MuClient.Shared/` — el juego (`MuGame`), la cámara y los dibujantes.
+    `SkinnedMeshBuilder`) y la `Camera`.
+  - `Game/` — las reglas sin gráficos: `Character`, `Bot`, `Monster`, `Npc`,
+    `ChatLog` y `Simulation`, que las une. El perfil offline vive en
+    `ProfileStore` (cuenta, contraseña y tres espacios).
+- `src/MuClient.Shared/` — el juego compartido: `MuGame` (bucle, toques y lienzo
+  virtual), `Scenes/` (una pantalla por fichero: `LoginScene`,
+  `CharacterSelectScene`, `CharacterCreateScene`, `GameScene`, unidas por
+  `GameHost`), `Ui/` (`Theme`, `InputState`, `TextInput`, `Hud`) y `Rendering/`
+  (texto, mundo y personajes, con `ModelCache` compartiendo mallas).
+- `tests/MuCore.Tests/` — pruebas de xUnit de la lógica pura, sin GPU.
 - `tools/AssetFetcher/` — descarga los recursos publicados por el cliente web.
 
 ## Compilar y ejecutar
@@ -28,8 +36,19 @@ MU_DATA=/ruta/al/Data dotnet run --project src/MuClient -c Release
 ```
 
 La carpeta de datos se indica con la variable de entorno `MU_DATA`
-(`DataLocator`). El mundo inicial se elige con `MU_WORLD`; en el juego, RePág y
-AvPág recorren los mundos.
+(`DataLocator`). Dentro del juego, el botón de opciones (arriba a la derecha)
+abre la lista de mundos; se empieza en Lorencia.
+
+Para comprobar una pantalla sin pantalla física (útil en CI o por SSH), el modo
+de comprobación abre una pantalla, guarda `comprobacion.png` y se cierra solo:
+
+```bash
+MU_DATA=/ruta/al/Data MU_PROFILE=/tmp/perfil MU_SMOKE=1 \
+  MU_SMOKE_SCENE=game MU_SMOKE_WORLD=1 \
+  xvfb-run -a dotnet src/MuClient/bin/Release/net9.0/MuClient.dll
+```
+
+`MU_SMOKE_SCENE` admite `game` (por defecto), `login`, `select` y `create`.
 
 ## Los datos del cliente no están en el repositorio
 
@@ -85,6 +104,17 @@ Comprobado: los ficheros nativos del sitio web son idénticos a los del cliente
 de referencia, así que no aportan nada nuevo en estos formatos. Lo que solo
 tiene la web son GLB (monstruos, efectos) y audio, que este cliente no lee.
 
+Los monstruos de la web están **solo en GLB**: su grupo `monsters` no trae ni un
+solo BMD. Por eso los monstruos de este cliente salen de otra copia del cliente,
+no de la web. Lo que sí publica la web en formato nativo es el terreno y los
+objetos de cada mundo, y por eso sirve para completar mapas.
+
+El mundo 19 (Chaos Castle) es el único que la web trae a medias: su
+`TerrainHeight.OZB` son 66.620 bytes **todos a cero**, tanto en la web como en la
+copia local. No es un fichero que se pueda leer, así que `TerrainHeightReader`
+devuelve un suelo llano en vez de fallar y el mundo se carga igual (los demás
+ficheros del mundo sí son válidos).
+
 ## Empaquetar el juego en un APK
 
 El APK se compila sin datos, pero entonces el juego avisa de que le faltan. Para
@@ -119,7 +149,20 @@ El mundo 1 con el personaje y seis monstruos necesita 258 ficheros y 9 MB. Los
 ## Texto en pantalla
 
 El proyecto no usa el empaquetador de contenido de MonoGame, así que no hay
-`SpriteFont`. `BitmapFont` define las letras como mapas de bits y
-`OverlayRenderer` las pinta con una textura de un píxel. Sirve para enseñar los
-avisos de fallo, que en un móvil no se pueden ver de otra forma; también se
-escriben en la salida de error, que en Android acaba en el registro del sistema.
+`SpriteFont`. `BitmapFont` define las letras como mapas de bits (solo mayúsculas,
+dígitos y signos) y `TextRenderer` las pinta con una textura de un píxel, con
+`BitmapFont.Normalize` pasando el texto a mayúsculas. El HUD se dibuja sin prueba
+de profundidad para que quede siempre encima del mundo. Los avisos de fallo
+también se escriben en la salida de error, que en Android acaba en el registro
+del sistema.
+
+## Pruebas
+
+```bash
+dotnet test tests/MuCore.Tests/MuCore.Tests.csproj -c Release
+```
+
+Cubren la lógica pura (`Character`, `ProfileStore`, `Simulation`) y no necesitan
+GPU. En este entorno el SDK está en `~/.dotnet`, así que hay que añadirlo al
+`PATH` (`export PATH="$HOME/.dotnet:$PATH"`). Para compilar Android hacen falta
+además `ANDROID_HOME` y `JAVA_HOME`; el aviso sobre el JDK es inofensivo.

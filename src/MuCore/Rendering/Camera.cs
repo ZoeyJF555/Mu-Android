@@ -64,4 +64,31 @@ public sealed class Camera
             nearPlaneDistance: 0.1f,
             farPlaneDistance: 2000f);
     }
+
+    /// <summary>
+    /// Proyecta un punto del mundo sobre la pantalla, en píxeles. Devuelve null
+    /// si el punto queda detrás de la cámara, que es cuando no se debe dibujar.
+    /// Se usa para colocar los nombres encima de los personajes.
+    /// </summary>
+    /// <param name="world">Punto del mundo.</param>
+    /// <param name="width">Ancho de la pantalla, en píxeles.</param>
+    /// <param name="height">Alto de la pantalla, en píxeles.</param>
+    public Vector2? Project(Vector3 world, int width, int height)
+    {
+        var clip = Vector4.Transform(new Vector4(world, 1f), View * Projection);
+        if (clip.W <= 0.001f)
+        {
+            return null;
+        }
+
+        var ndc = new Vector3(clip.X / clip.W, clip.Y / clip.W, clip.Z / clip.W);
+        if (ndc.Z < 0f || ndc.Z > 1f)
+        {
+            return null;
+        }
+
+        return new Vector2(
+            (ndc.X + 1f) * 0.5f * width,
+            (1f - ndc.Y) * 0.5f * height);
+    }
 }

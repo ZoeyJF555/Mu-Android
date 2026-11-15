@@ -9,7 +9,9 @@ namespace Mu.Client.Rendering;
 /// <summary>
 /// Dibuja un mundo completo: el suelo con su textura y los objetos encima. Todo
 /// lo que se sube a la tarjeta gráfica se hace una vez al cargar, así que el
-/// bucle de dibujo solo recorre objetos y emite órdenes de dibujo.
+/// bucle de dibujo solo recorre objetos y emite órdenes de dibujo. Los
+/// personajes que pueblan el mapa no son cosa suya: los dibuja la escena, que
+/// sabe qué hay en el mundo en cada momento.
 /// </summary>
 public sealed class WorldRenderer : IDisposable
 {
@@ -22,8 +24,6 @@ public sealed class WorldRenderer : IDisposable
     private readonly Texture2D _ground;
     private readonly Dictionary<int, ObjectPart[]> _objects;
     private readonly WorldAssets _world;
-    private CharacterRenderer? _character;
-    private float _characterHeading;
 
     public WorldRenderer(GraphicsDevice device, WorldAssets world)
     {
@@ -59,37 +59,11 @@ public sealed class WorldRenderer : IDisposable
     /// <summary>Cuántos objetos distintos tienen modelo cargado.</summary>
     public int ObjectTypeCount => _objects.Count;
 
-    /// <summary>El personaje que se dibuja sobre el mapa, si se cargó uno.</summary>
-    public CharacterRenderer? Character
+    /// <summary>Dibuja el suelo y los objetos del mapa desde la cámara indicada.</summary>
+    public void Draw(Camera camera)
     {
-        get => _character;
-        set => _character = value;
-    }
-
-    /// <summary>Dónde está el personaje en el mundo, en unidades.</summary>
-    public Vector3 CharacterPosition { get; set; } = new(128f, 0f, 128f);
-
-    /// <summary>Hacia dónde mira el personaje, en grados.</summary>
-    public float CharacterHeadingDegrees
-    {
-        get => _characterHeading;
-        set => _characterHeading = value;
-    }
-
-    /// <summary>Los monstruos y demás actores que pueblan el mapa.</summary>
-    public IList<Actor> Actors { get; } = new List<Actor>();
-
-    /// <summary>Dibuja el mundo entero desde la cámara indicada.</summary>
-    public void Draw(Camera camera) => Draw(camera, 0f);
-
-    /// <summary>Dibuja el mundo y el personaje, avanzando su animación.</summary>
-    public void Draw(Camera camera, float seconds)
-    {
-        var view = ToXna(camera.View);
-        var projection = ToXna(camera.Projection);
-
-        _effect.View = view;
-        _effect.Projection = projection;
+        _effect.View = ToXna(camera.View);
+        _effect.Projection = ToXna(camera.Projection);
         _effect.World = Matrix.Identity;
         _effect.Texture = _ground;
 
@@ -105,27 +79,6 @@ public sealed class WorldRenderer : IDisposable
         }
 
         DrawObjects(camera);
-
-        foreach (var actor in Actors)
-        {
-            DrawActor(actor, camera, seconds);
-        }
-
-        if (_character is not null)
-        {
-            var world = ModelOrientation.ToWorld(
-                new System.Numerics.Vector3(CharacterPosition.X, CharacterPosition.Y, CharacterPosition.Z),
-                CharacterHeadingDegrees);
-            _character.Draw(ToXna(world), camera, seconds);
-        }
-    }
-
-    private static void DrawActor(Actor actor, Camera camera, float seconds)
-    {
-        var world = ModelOrientation.ToWorld(
-            new System.Numerics.Vector3(actor.Position.X, actor.Position.Y, actor.Position.Z),
-            actor.HeadingDegrees);
-        actor.Renderer.Draw(ToXna(world), camera, seconds);
     }
 
     private void DrawObjects(Camera camera)
@@ -231,14 +184,6 @@ public sealed class WorldRenderer : IDisposable
                 part.Texture?.Dispose();
             }
         }
-
-        _character?.Dispose();
-        foreach (var actor in Actors)
-        {
-            actor.Renderer.Dispose();
-        }
-
-        Actors.Clear();
     }
 
     private readonly record struct ObjectPart(GpuMesh Mesh, Texture2D? Texture);
