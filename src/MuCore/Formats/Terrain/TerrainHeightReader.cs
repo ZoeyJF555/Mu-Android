@@ -22,7 +22,17 @@ public static class TerrainHeightReader
             return ReadExtended(ozb);
         }
 
-        return ReadPaletted(ImageDecoder.Decode(ozb, "TerrainHeight.OZB"));
+        try
+        {
+            return ReadPaletted(ImageDecoder.Decode(ozb, "TerrainHeight.OZB"));
+        }
+        catch (InvalidDataException)
+        {
+            // Algún mundo trae el mapa de alturas a ceros (el 19, Chaos Castle), así
+            // que no hay BMP que leer. Es mejor un suelo llano que dejar el mapa sin
+            // cargar; los demás ficheros del mundo sí se pueden usar.
+            return new float[TerrainConstants.TileCount];
+        }
     }
 
     /// <summary>La variante de 8 bits: la escala de grises × factor.</summary>

@@ -85,6 +85,17 @@ Comprobado: los ficheros nativos del sitio web son idénticos a los del cliente
 de referencia, así que no aportan nada nuevo en estos formatos. Lo que solo
 tiene la web son GLB (monstruos, efectos) y audio, que este cliente no lee.
 
+Los monstruos de la web están **solo en GLB**: su grupo `monsters` no trae ni un
+solo BMD. Por eso los monstruos de este cliente salen de otra copia del cliente,
+no de la web. Lo que sí publica la web en formato nativo es el terreno y los
+objetos de cada mundo, y por eso sirve para completar mapas.
+
+El mundo 19 (Chaos Castle) es el único que la web trae a medias: su
+`TerrainHeight.OZB` son 66.620 bytes **todos a cero**, tanto en la web como en la
+copia local. No es un fichero que se pueda leer, así que `TerrainHeightReader`
+devuelve un suelo llano en vez de fallar y el mundo se carga igual (los demás
+ficheros del mundo sí son válidos).
+
 ## Empaquetar el juego en un APK
 
 El APK se compila sin datos, pero entonces el juego avisa de que le faltan. Para
