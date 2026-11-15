@@ -6,7 +6,7 @@ namespace Mu.Client.Android;
 /// <summary>
 /// Lee los recursos que van dentro del APK. En Android no son ficheros del
 /// disco, sino entradas del paquete, y solo se pueden leer de una en una, así
-/// que primero se pide la lista y luego se abre cada una por su nombre real.
+/// que primero se recorre el árbol y luego se abre cada una por su nombre real.
 /// </summary>
 public sealed class AndroidAssetSource : IAssetSource
 {
@@ -23,7 +23,7 @@ public sealed class AndroidAssetSource : IAssetSource
 
         _assets = assets;
         _root = root.Trim('/');
-        _index = new AssetIndex(EnumerateNames(_root));
+        _index = new AssetIndex(AssetTree.Collect(_root, List));
     }
 
     /// <summary>Cuántos recursos se han encontrado.</summary>
@@ -38,7 +38,7 @@ public sealed class AndroidAssetSource : IAssetSource
             return null;
         }
 
-        using var stream = _assets.Open(Combine(_root, name));
+        using var stream = _assets.Open($"{_root}/{name}");
         using var buffer = new MemoryStream();
         stream.CopyTo(buffer);
         return buffer.ToArray();
@@ -50,39 +50,11 @@ public sealed class AndroidAssetSource : IAssetSource
     /// <inheritdoc />
     public IEnumerable<string> Enumerate(string prefix) => _index.WithPrefix(prefix);
 
-    /// <summary>Recorre los recursos de una carpeta, entrando en las subcarpetas.</summary>
-    private IEnumerable<string> EnumerateNames(string folder)
-    {
-        var names = new List<string>();
-
-        void Walk(string path, string relative)
-        {
-            var children = List(path);
-            if (children is null)
-            {
-                return;
-            }
-
-            foreach (var child in children)
-            {
-                var childPath = Combine(path, child);
-                var childRelative = relative.Length == 0 ? child : $"{relative}/{child}";
-                if (IsFolder(path, child))
-                {
-                    Walk(childPath, childRelative);
-                }
-                else
-                {
-                    names.Add(childRelative);
-                }
-            }
-        }
-
-        Walk(folder, string.Empty);
-        return names;
-    }
-
-    /// <summary>Lista una carpeta, o null si no existe o no se puede leer.</summary>
+    /// <summary>
+    /// Lista una carpeta, o null si no se puede leer. Si la ruta es un fichero,
+    /// Android puede devolver una lista vacía en vez de fallar, y de eso se
+    /// encarga <see cref="AssetTree"/>.
+    /// </summary>
     private string[]? List(string path)
     {
         try
@@ -94,13 +66,4 @@ public sealed class AndroidAssetSource : IAssetSource
             return null;
         }
     }
-
-    /// <summary>
-    /// Android no dice si una entrada es carpeta, así que se prueba a listarla:
-    /// si responde, es carpeta, y si falla, es fichero.
-    /// </summary>
-    private bool IsFolder(string parent, string child) => List(Combine(parent, child)) is not null;
-
-    private static string Combine(string left, string right) =>
-        left.Length == 0 ? right : $"{left}/{right}";
 }

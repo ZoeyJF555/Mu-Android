@@ -99,10 +99,17 @@ Dentro de un APK los recursos se leen de uno en uno y sin poder listarlos como
 ficheros, así que primero se recorre el árbol y luego se abre cada uno por su
 nombre real. `AssetIndex` hace esa traducción entre el nombre que pide el juego
 y el que hay de verdad, ignorando mayúsculas, y es lo que comparten
-`FileAssetSource` y `AndroidAssetSource`.
+`FileAssetSource` y `AndroidAssetSource`. `AssetTree` recorre ese árbol; da por
+carpeta solo lo que tiene hijos, porque Android puede responder con una lista
+vacía al listar un fichero en vez de dar un error.
 
-El mundo 1 con el personaje y seis monstruos necesita 258 ficheros y 9 MB. El
-resto de mundos se pueden añadir pasando una carpeta más completa.
+Al cambiar la carpeta de datos hay que borrar `obj/` y `bin/` antes de
+recompilar. Si no, el empaquetado reutiliza el paquete anterior y el APK sale
+con los datos viejos, sin avisar.
+
+El mundo 1 con el personaje y seis monstruos necesita 258 ficheros y 9 MB. Los
+46 mundos con sus objetos, personaje y monstruos necesitan 5.194 ficheros y
+249 MB.
 
 ## Texto en pantalla
 
