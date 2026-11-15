@@ -20,7 +20,7 @@ public sealed class Camera
     public const float PitchDegrees = 48.5f;
 
     /// <summary>Ángulo de visión vertical, en grados, como el original.</summary>
-    public const float FieldOfViewDegrees = 30f;
+    public const float FieldOfViewDegrees = 35f;
 
     /// <summary>Centímetros por unidad de mundo.</summary>
     public const float CentimetersPerUnit = 100f;
@@ -32,7 +32,7 @@ public sealed class Camera
     public float HeadingDegrees { get; set; } = -45f;
 
     /// <summary>Distancia de la cámara al objetivo, en centímetros.</summary>
-    public float Distance { get; set; } = 1200f;
+    public float Distance { get; set; } = 1700f;
 
     /// <summary>Posición de la cámara en el mundo.</summary>
     public Vector3 Position { get; private set; }

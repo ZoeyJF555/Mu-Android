@@ -60,6 +60,11 @@ redistribuyas sin permiso.
 - El jugador sí se ensambla por partes (`CharacterAssembler`), porque su
   esqueleto vive en `Player/player.bmd` y el equipo son ficheros aparte.
 - Las armas y escudos se cuelgan de los huesos `Bip01 R Hand` / `Bip01 L Hand`.
+- La cámara y los actores siguen al cliente original `bhrama-br/muonline-android`:
+  distancia 1700 y campo de visión 35 grados (`Camera`), y los personajes se
+  apoyan sobre el suelo con `TerrainHeightSampler`, que interpola la altura de
+  las cuatro casillas que rodean el punto. Sin eso quedan hundidos, porque el
+  terreno de Lorencia no está a cero en el punto de partida (está a 1,65).
 
 ## Recursos del cliente web
 
@@ -79,3 +84,42 @@ el prefijo para juntarlos en un solo árbol.
 Comprobado: los ficheros nativos del sitio web son idénticos a los del cliente
 de referencia, así que no aportan nada nuevo en estos formatos. Lo que solo
 tiene la web son GLB (monstruos, efectos) y audio, que este cliente no lee.
+
+## Empaquetar el juego en un APK
+
+El APK se compila sin datos, pero entonces el juego avisa de que le faltan. Para
+que funcione hay que indicar la carpeta de datos:
+
+```bash
+dotnet build src/MuClient.Android/MuClient.Android.csproj -c Release \
+  -p:MuDataFolder=/ruta/a/Data
+```
+
+Los datos se meten como recursos del paquete y se leen con `AndroidAssetSource`,
+que no los trata como ficheros del disco sino como entradas del APK. Por eso el
+juego recibe el origen de recursos desde fuera (`MuGame(Func<IAssetSource?>)`):
+el escritorio usa `DataLocator` y Android usa el paquete.
+
+Dentro de un APK los recursos se leen de uno en uno y sin poder listarlos como
+ficheros, así que primero se recorre el árbol y luego se abre cada uno por su
+nombre real. `AssetIndex` hace esa traducción entre el nombre que pide el juego
+y el que hay de verdad, ignorando mayúsculas, y es lo que comparten
+`FileAssetSource` y `AndroidAssetSource`. `AssetTree` recorre ese árbol; da por
+carpeta solo lo que tiene hijos, porque Android puede responder con una lista
+vacía al listar un fichero en vez de dar un error.
+
+Al cambiar la carpeta de datos hay que borrar `obj/` y `bin/` antes de
+recompilar. Si no, el empaquetado reutiliza el paquete anterior y el APK sale
+con los datos viejos, sin avisar.
+
+El mundo 1 con el personaje y seis monstruos necesita 258 ficheros y 9 MB. Los
+46 mundos con sus objetos, personaje y monstruos necesitan 5.194 ficheros y
+249 MB.
+
+## Texto en pantalla
+
+El proyecto no usa el empaquetador de contenido de MonoGame, así que no hay
+`SpriteFont`. `BitmapFont` define las letras como mapas de bits y
+`OverlayRenderer` las pinta con una textura de un píxel. Sirve para enseñar los
+avisos de fallo, que en un móvil no se pueden ver de otra forma; también se
+escriben en la salida de error, que en Android acaba en el registro del sistema.

@@ -27,4 +27,23 @@
     <Compile Include="..\MuClient.Shared\**\*.cs" Link="Shared\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
+  <!--
+    Los datos del cliente no están en el repositorio porque tienen copyright, así
+    que el APK se puede compilar sin ellos. Para que el juego funcione en el
+    móvil hay que empaquetarlos indicando su carpeta:
+
+      dotnet build src/MuClient.Android/MuClient.Android.csproj -c Release \
+        -p:MuDataFolder=/ruta/a/Data
+
+    Sin esa propiedad el APK se construye igual, pero el juego avisa de que le
+    faltan los datos en vez de quedarse en negro.
+  -->
+  <ItemGroup Condition="'$(MuDataFolder)' != ''">
+    <AndroidAsset Include="$(MuDataFolder)\**\*" Link="Data\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <Target Name="ComprobarCarpetaDeDatos" BeforeTargets="Build" Condition="'$(MuDataFolder)' != '' and !Exists('$(MuDataFolder)')">
+    <Error Text="La carpeta de datos '$(MuDataFolder)' no existe." />
+  </Target>
+
 </Project>

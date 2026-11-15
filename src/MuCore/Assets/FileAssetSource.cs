@@ -1,5 +1,3 @@
-using System.Collections.Concurrent;
-
 namespace Mu.Core.Assets;
 
 /// <summary>
@@ -9,14 +7,13 @@ namespace Mu.Core.Assets;
 /// </summary>
 public sealed class FileAssetSource : IAssetSource
 {
-    private readonly ConcurrentDictionary<string, string> _resolved = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Lazy<Dictionary<string, string>> _index;
+    private readonly AssetIndex _index;
 
     public FileAssetSource(string root)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(root);
         Root = Path.GetFullPath(root);
-        _index = new Lazy<Dictionary<string, string>>(BuildIndex, isThreadSafe: true);
+        _index = new AssetIndex(EnumerateNames());
     }
 
     /// <summary>Directorio raíz de los datos del cliente.</summary>
@@ -33,50 +30,23 @@ public sealed class FileAssetSource : IAssetSource
     public bool Exists(string relativePath) => Resolve(relativePath) is not null;
 
     /// <inheritdoc />
-    public IEnumerable<string> Enumerate(string prefix)
-    {
-        var normalized = Normalize(prefix);
-        return _index.Value.Keys
-            .Where(key => key.StartsWith(normalized, StringComparison.OrdinalIgnoreCase))
-            .OrderBy(key => key, StringComparer.OrdinalIgnoreCase);
-    }
+    public IEnumerable<string> Enumerate(string prefix) => _index.WithPrefix(prefix);
 
     private string? Resolve(string relativePath)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
-
-        var normalized = Normalize(relativePath);
-        if (_resolved.TryGetValue(normalized, out var cached))
-        {
-            return cached;
-        }
-
-        var candidate = Path.Combine(Root, normalized);
-        if (File.Exists(candidate))
-        {
-            _resolved[normalized] = candidate;
-            return candidate;
-        }
-
-        return _index.Value.TryGetValue(normalized, out var indexed) ? indexed : null;
+        var name = _index.Resolve(relativePath);
+        return name is null ? null : Path.Combine(Root, name);
     }
 
-    private Dictionary<string, string> BuildIndex()
+    private IEnumerable<string> EnumerateNames()
     {
-        var index = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (!Directory.Exists(Root))
         {
-            return index;
+            return [];
         }
 
-        foreach (var file in Directory.EnumerateFiles(Root, "*", SearchOption.AllDirectories))
-        {
-            index.TryAdd(Normalize(Path.GetRelativePath(Root, file)), file);
-        }
-
-        return index;
+        return Directory
+            .EnumerateFiles(Root, "*", SearchOption.AllDirectories)
+            .Select(file => AssetIndex.Normalize(Path.GetRelativePath(Root, file)));
     }
-
-    private static string Normalize(string path) =>
-        path.Replace('\\', '/').TrimStart('/');
 }
