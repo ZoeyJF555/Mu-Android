@@ -167,6 +167,23 @@ foreach (var m in new[] { "Monster/Monster01.bmd", /* ... */ "Monster/Monster06.
 
 Así la lista sale de lo que el juego pide de verdad, sin adivinar carpetas.
 
+## Publicar una versión
+
+El APK no cabe en el repositorio (`*.apk` está en `.gitignore`), así que se
+entrega como adjunto de un Release. Con `gh` ya autenticado basta con:
+
+```bash
+git push origin main
+gh release create v1.0.2-offline --repo ZoeyJF555/Mu-Android \
+  --title "Mu Android v1.0.2-offline" --notes-file notas.md
+gh release upload v1.0.2-offline apk-salida/MuAndroid-Completo.apk --clobber
+```
+
+El enlace de descarga directa que se le pasa a quien va a probarlo es
+`https://github.com/ZoeyJF555/Mu-Android/releases/download/v1.0.2-offline/MuAndroid-Completo.apk`,
+y conviene comprobarlo con `curl -sIL` antes de mandarlo: tiene que responder
+`302` y luego `200` con `content-type: application/vnd.android.package-archive`.
+
 ## Texto en pantalla
 
 El proyecto no usa el empaquetador de contenido de MonoGame, así que no hay
