@@ -7,11 +7,11 @@ using Mu.Core.World;
 namespace Mu.Client.Rendering;
 
 /// <summary>
-/// Dibuja un mundo completo: el suelo con su textura y los objetos encima. Todo
-/// lo que se sube a la tarjeta gráfica se hace una vez al cargar, así que el
-/// bucle de dibujo solo recorre objetos y emite órdenes de dibujo. Los
-/// personajes que pueblan el mapa no son cosa suya: los dibuja la escena, que
-/// sabe qué hay en el mundo en cada momento.
+/// Dibuja un mundo completo: el suelo con sus texturas y los objetos encima.
+/// Todo lo que se sube a la tarjeta gráfica se hace una vez al cargar, así que
+/// el bucle de dibujo solo recorre tandas y objetos y emite órdenes de dibujo.
+/// Los personajes que pueblan el mapa no son cosa suya: los dibuja la escena,
+/// que sabe qué hay en el mundo en cada momento.
 /// </summary>
 public sealed class WorldRenderer : IDisposable
 {
@@ -20,8 +20,9 @@ public sealed class WorldRenderer : IDisposable
 
     private readonly GraphicsDevice _device;
     private readonly BasicEffect _effect;
-    private readonly GpuMesh _terrain;
-    private readonly Texture2D _ground;
+    private readonly TerrainBatchMesh[] _base;
+    private readonly TerrainBatchMesh[] _overlay;
+    private readonly Texture2D?[] _ground;
     private readonly Dictionary<int, ObjectPart[]> _objects;
     private readonly WorldAssets _world;
 
@@ -37,8 +38,9 @@ public sealed class WorldRenderer : IDisposable
             LightingEnabled = false,
         };
 
-        _terrain = BuildTerrain(device, world.Terrain);
-        _ground = CreateTexture(device, world.GroundTexture);
+        _ground = world.GroundTiles.Select(t => TryCreateTexture(device, t)).ToArray();
+        _base = BuildBatches(device, world.Terrain.Base);
+        _overlay = BuildBatches(device, world.Terrain.Overlay);
 
         _objects = new Dictionary<int, ObjectPart[]>();
         foreach (var (type, model) in world.ObjectModels)
@@ -65,25 +67,46 @@ public sealed class WorldRenderer : IDisposable
         _effect.View = ToXna(camera.View);
         _effect.Projection = ToXna(camera.Projection);
         _effect.World = Matrix.Identity;
-        _effect.Texture = _ground;
 
         _device.DepthStencilState = DepthStencilState.Default;
         _device.RasterizerState = RasterizerState.CullCounterClockwise;
-        _device.BlendState = BlendState.Opaque;
 
-        foreach (var pass in _effect.CurrentTechnique.Passes)
-        {
-            pass.Apply();
-            var count = _terrain.Bind(_device);
-            _device.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, count / 3);
-        }
+        // El suelo se repite por el mapa, así que se muestrea con repetición: una
+        // textura cubre 4 × 4 casillas y se repite sin costura por todo el terreno.
+        _device.SamplerStates[0] = SamplerState.LinearWrap;
+        DrawBatches(_base, BlendState.Opaque);
+        DrawBatches(_overlay, BlendState.NonPremultiplied);
 
         DrawObjects(camera);
+    }
+
+    private void DrawBatches(TerrainBatchMesh[] batches, BlendState blend)
+    {
+        _device.BlendState = blend;
+
+        foreach (var batch in batches)
+        {
+            var texture = _ground[batch.TextureIndex];
+            if (texture is null)
+            {
+                continue;
+            }
+
+            _effect.Texture = texture;
+            foreach (var pass in _effect.CurrentTechnique.Passes)
+            {
+                pass.Apply();
+                var count = batch.Mesh.Bind(_device);
+                _device.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, count / 3);
+            }
+        }
     }
 
     private void DrawObjects(Camera camera)
     {
         var eye = camera.Position;
+
+        _device.BlendState = BlendState.Opaque;
 
         foreach (var obj in _world.Objects)
         {
@@ -122,20 +145,25 @@ public sealed class WorldRenderer : IDisposable
         }
     }
 
-    private static GpuMesh BuildTerrain(GraphicsDevice device, TerrainMesh terrain)
+    private static TerrainBatchMesh[] BuildBatches(GraphicsDevice device, IReadOnlyList<TerrainBatch> batches)
     {
-        var vertices = new VertexPositionColorTexture[terrain.Positions.Length];
-        for (var i = 0; i < vertices.Length; i++)
+        var result = new TerrainBatchMesh[batches.Count];
+        for (var i = 0; i < batches.Count; i++)
         {
-            var p = terrain.Positions[i];
-            var c = terrain.Colors[i];
-            vertices[i] = new VertexPositionColorTexture(
-                new Vector3(p.X, p.Y, p.Z),
-                new Color(c.X, c.Y, c.Z),
-                new Vector2(terrain.TexCoords[i].X, terrain.TexCoords[i].Y));
+            var batch = batches[i];
+            var vertices = new VertexPositionColor4Texture[batch.Positions.Length];
+            for (var v = 0; v < vertices.Length; v++)
+            {
+                vertices[v] = new VertexPositionColor4Texture(
+                    new Vector3(batch.Positions[v].X, batch.Positions[v].Y, batch.Positions[v].Z),
+                    batch.Colors[v],
+                    new Vector2(batch.TexCoords[v].X, batch.TexCoords[v].Y));
+            }
+
+            result[i] = new TerrainBatchMesh(batch.TextureIndex, GpuMesh.Create(device, vertices, batch.Indices));
         }
 
-        return GpuMesh.Create(device, vertices, terrain.Indices);
+        return result;
     }
 
     private static VertexPositionColorTexture[] BuildVertices(StaticMesh mesh)
@@ -154,15 +182,15 @@ public sealed class WorldRenderer : IDisposable
         return vertices;
     }
 
+    private static Texture2D? TryCreateTexture(GraphicsDevice device, DecodedImage? image) =>
+        image is null || image.Width <= 0 || image.Height <= 0 ? null : CreateTexture(device, image);
+
     private static Texture2D CreateTexture(GraphicsDevice device, DecodedImage image)
     {
         var texture = new Texture2D(device, image.Width, image.Height, mipmap: false, SurfaceFormat.Color);
         texture.SetData(image.Pixels);
         return texture;
     }
-
-    private static Texture2D? TryCreateTexture(GraphicsDevice device, DecodedImage? image) =>
-        image is null || image.Width <= 0 || image.Height <= 0 ? null : CreateTexture(device, image);
 
     private static Matrix ToXna(System.Numerics.Matrix4x4 matrix) => new(
         matrix.M11, matrix.M12, matrix.M13, matrix.M14,
@@ -172,8 +200,21 @@ public sealed class WorldRenderer : IDisposable
 
     public void Dispose()
     {
-        _terrain.Dispose();
-        _ground.Dispose();
+        foreach (var batch in _base)
+        {
+            batch.Mesh.Dispose();
+        }
+
+        foreach (var batch in _overlay)
+        {
+            batch.Mesh.Dispose();
+        }
+
+        foreach (var texture in _ground)
+        {
+            texture?.Dispose();
+        }
+
         _effect.Dispose();
 
         foreach (var parts in _objects.Values)
@@ -185,6 +226,8 @@ public sealed class WorldRenderer : IDisposable
             }
         }
     }
+
+    private readonly record struct TerrainBatchMesh(int TextureIndex, GpuMesh Mesh);
 
     private readonly record struct ObjectPart(GpuMesh Mesh, Texture2D? Texture);
 }

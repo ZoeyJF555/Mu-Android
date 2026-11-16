@@ -13,8 +13,13 @@ namespace Mu.Client.Rendering;
 /// </summary>
 public sealed class CharacterRenderer : IDisposable
 {
-    /// <summary>Fotogramas por segundo a los que se reproduce la animación.</summary>
-    private const float FramesPerSecond = 12f;
+    /// <summary>
+    /// Fotogramas por segundo a los que se reproduce la animación. El cliente
+    /// original reproduce a 5 (los monstruos a 4), y es lo que hace que el paso
+    /// case con la velocidad: a 12 los pies patinaban, porque el cuerpo andaba
+    /// menos de lo que movían las piernas.
+    /// </summary>
+    private const float FramesPerSecond = 5f;
 
     /// <summary>Cuántos huesos puede mover a la vez la tarjeta; el máximo del efecto es 72 y el modelo tiene 60.</summary>
     private const int MaxBones = 72;
@@ -24,6 +29,7 @@ public sealed class CharacterRenderer : IDisposable
     private readonly CharacterResources _resources;
     private readonly Matrix[] _bones = new Matrix[MaxBones];
 
+    private int _action;
     private float _frame;
 
     /// <param name="device">La tarjeta gráfica.</param>
@@ -53,7 +59,22 @@ public sealed class CharacterRenderer : IDisposable
     }
 
     /// <summary>Acción que se está reproduciendo (0 = parado).</summary>
-    public int Action { get; set; }
+    public int Action
+    {
+        get => _action;
+        set
+        {
+            if (_action == value)
+            {
+                return;
+            }
+
+            // Al cambiar de acción se vuelve al primer fotograma, como el cliente
+            // original: si no, un golpe empezaría a mitad y se vería raro.
+            _action = value;
+            _frame = 0f;
+        }
+    }
 
     /// <summary>El modelo que se dibuja, para consultar sus acciones.</summary>
     public CharacterModel Model { get; }

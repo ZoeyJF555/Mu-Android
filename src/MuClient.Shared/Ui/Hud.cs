@@ -57,6 +57,40 @@ public static class Hud
     public static Rectangle AttackButton(int width, int height) =>
         new(width - Margin - AttackSize, height - Margin - AttackSize, AttackSize, AttackSize);
 
+    /// <summary>
+    /// Cierto si el punto cae dentro del botón de ataque. Se comprueba contra el
+    /// círculo que se dibuja, no contra su rectángulo: el botón es redondo y
+    /// tocar la esquina no debe contar como pulsarlo.
+    /// </summary>
+    /// <param name="point">Dónde ha tocado el jugador.</param>
+    /// <param name="width">Ancho del lienzo.</param>
+    /// <param name="height">Alto del lienzo.</param>
+    public static bool HitsAttack(Vector2 point, int width, int height)
+    {
+        var button = AttackButton(width, height);
+        var centre = new Vector2(button.Center.X, button.Center.Y);
+        return Vector2.Distance(point, centre) <= AttackSize / 2f;
+    }
+
+    /// <summary>Cierto si algún dedo está pulsando el botón de ataque.</summary>
+    /// <param name="input">Lo que está tocando el jugador.</param>
+    /// <param name="width">Ancho del lienzo.</param>
+    /// <param name="height">Alto del lienzo.</param>
+    public static bool AttackPressed(InputState input, int width, int height)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+
+        foreach (var point in input.Points)
+        {
+            if (HitsAttack(new Vector2(point.X, point.Y), width, height))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>Botón de inventario, junto al de ataque.</summary>
     public static Rectangle InventoryButton(int width, int height) =>
         new(width - Margin - AttackSize - SmallButton - 12, height - Margin - SmallButton, SmallButton, SmallButton);
@@ -83,7 +117,7 @@ public static class Hud
     /// <param name="input">Lo que está tocando el jugador.</param>
     /// <param name="width">Ancho del lienzo.</param>
     /// <param name="height">Alto del lienzo.</param>
-    /// <param name="joystickCentre">Dónde está el mando, o null si no se está usando.</param>
+    /// <param name="joystickCentre">Dónde está el centro del mando.</param>
     /// <param name="joystickOffset">Cuánto se ha empujado el mando.</param>
     /// <param name="joystickRadius">Radio del mando.</param>
     public static void Draw(
@@ -92,7 +126,7 @@ public static class Hud
         InputState input,
         int width,
         int height,
-        Vector2? joystickCentre,
+        Vector2 joystickCentre,
         Vector2 joystickOffset,
         float joystickRadius)
     {
@@ -104,13 +138,16 @@ public static class Hud
         DrawMinimap(renderer, simulation, width);
         DrawButtons(renderer, input, width, height);
         DrawChat(renderer, simulation, width, height);
+        DrawJoystick(renderer, joystickCentre, joystickOffset, joystickRadius);
+    }
 
-        if (joystickCentre is { } centre)
-        {
-            renderer.Circle(centre, joystickRadius, new Color(255, 255, 255, 40));
-            renderer.CircleOutline(centre, joystickRadius, new Color(220, 210, 180, 120), 3f);
-            renderer.Circle(centre + joystickOffset, joystickRadius / 3f, new Color(230, 220, 190, 180));
-        }
+    /// <summary>El mando táctil, siempre en su sitio para que se vea entero.</summary>
+    private static void DrawJoystick(TextRenderer renderer, Vector2 centre, Vector2 offset, float radius)
+    {
+        renderer.Circle(centre, radius, new Color(20, 22, 28, 120));
+        renderer.CircleOutline(centre, radius, new Color(220, 210, 180, 150), 3f);
+        renderer.Circle(centre + offset, radius / 3f, new Color(230, 220, 190, 210));
+        renderer.CircleOutline(centre + offset, radius / 3f, new Color(120, 110, 90, 200), 2f);
     }
 
     /// <summary>Nombre, nivel y las tres barras.</summary>
@@ -195,9 +232,13 @@ public static class Hud
     private static void DrawButtons(TextRenderer renderer, InputState input, int width, int height)
     {
         var attack = AttackButton(width, height);
-        var attackDown = input.Holding(attack);
-        renderer.Fill(attack, attackDown ? new Color(170, 60, 50, 235) : new Color(120, 40, 34, 220));
-        renderer.CircleOutline(attack.Center.ToVector2(), attack.Width / 2f, Theme.PanelBorder, 3f);
+        var centre = attack.Center.ToVector2();
+        var radius = attack.Width / 2f;
+
+        // El botón se dibuja redondo y se detecta redondo: si se pintara como un
+        // cuadrado, tocar la esquina parecería no hacer nada.
+        renderer.Circle(centre, radius, input.Holding(attack) ? new Color(170, 60, 50, 235) : new Color(120, 40, 34, 220));
+        renderer.CircleOutline(centre, radius, Theme.PanelBorder, 3f);
         renderer.TextCentered("ATACAR", attack, 2f, new Color(255, 230, 210));
 
         Theme.Button(renderer, InventoryButton(width, height), "INV", input.Holding(InventoryButton(width, height)), 1.6f);

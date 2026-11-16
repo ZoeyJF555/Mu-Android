@@ -22,14 +22,17 @@ public sealed class WorldAssets
     /// <summary>Número de mundo (1 = Lorencia).</summary>
     public required int World { get; init; }
 
-    /// <summary>La geometría del terreno.</summary>
-    public required TerrainMesh Terrain { get; init; }
+    /// <summary>La geometría del terreno, partida en tandas por textura.</summary>
+    public required TerrainGeometry Terrain { get; init; }
 
     /// <summary>Altura del suelo de cada casilla, para apoyar a los personajes.</summary>
     public required float[] Heights { get; init; }
 
-    /// <summary>La textura del suelo ya horneada.</summary>
-    public required DecodedImage GroundTexture { get; init; }
+    /// <summary>Atributos del suelo por casilla (agujeros, agua, paso...).</summary>
+    public required ushort[] Attributes { get; init; }
+
+    /// <summary>Las texturas de suelo del mundo, en el orden de los índices del mapa.</summary>
+    public required IReadOnlyList<DecodedImage> GroundTiles { get; init; }
 
     /// <summary>Los objetos colocados sobre el mapa.</summary>
     public required IReadOnlyList<TerrainObject> Objects { get; init; }
@@ -76,7 +79,9 @@ public static class WorldLoader
         var light = TerrainLightBaker.Bake(lightImage, heights);
 
         var tiles = LoadTiles(source, folder);
-        var ground = TerrainTextureBaker.Bake(tiles, mapping.Layer1, mapping.Layer2, mapping.Alpha);
+        var tileSizes = tiles.Select(t => (t.Width, t.Height)).ToArray();
+        var terrain = TerrainMeshBuilder.Build(
+            heights, attributes, light, tileSizes, mapping.Layer1, mapping.Layer2, mapping.Alpha);
 
         var objects = TerrainObjectReader.Read(Require(source, $"{folder}/EncTerrain{world}.obj"));
         var models = LoadObjectModels(source, world, objects);
@@ -84,9 +89,10 @@ public static class WorldLoader
         return new WorldAssets
         {
             World = world,
-            Terrain = TerrainMeshBuilder.Build(heights, attributes, light),
+            Terrain = terrain,
             Heights = heights,
-            GroundTexture = ground,
+            Attributes = attributes,
+            GroundTiles = tiles,
             Objects = objects,
             ObjectModels = models,
         };

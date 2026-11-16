@@ -109,16 +109,31 @@ public class SimulationTests
     }
 
     [Fact]
-    public void ElJugadorGiraConElMandoYNoAvanzaSolo()
+    public void ElJugadorMiraHaciaDondeAnda()
     {
         var simulation = NewSimulation();
         var before = simulation.PlayerPosition;
-        var heading = simulation.PlayerHeadingDegrees;
 
+        // El mando a la derecha: el personaje anda hacia el este y mira allí.
         simulation.Update(0.5f, new Vector2(1f, 0f), attack: false);
 
-        Assert.NotEqual(heading, simulation.PlayerHeadingDegrees);
-        Assert.Equal(before, simulation.PlayerPosition);
+        Assert.True(simulation.PlayerPosition.X > before.X, "debe andar hacia el este");
+        Assert.Equal(0f, simulation.PlayerHeadingDegrees, 1f);
+    }
+
+    [Fact]
+    public void ElJugadorAndaComoElClienteOriginal()
+    {
+        // 3,5 casillas por segundo: es lo que casa con el paso de la animación,
+        // de modo que los pies no patinan.
+        var simulation = NewSimulation();
+        var before = simulation.PlayerPosition;
+
+        simulation.Update(1f, new Vector2(1f, 0f), attack: false);
+
+        var travelled = Vector3.Distance(before, simulation.PlayerPosition);
+        Assert.Equal(Simulation.PlayerSpeed, travelled, 0.05f);
+        Assert.Equal(3.5f, Simulation.PlayerSpeed, 0.001f);
     }
 
     [Fact]

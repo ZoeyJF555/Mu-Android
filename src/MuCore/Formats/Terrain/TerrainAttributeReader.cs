@@ -14,6 +14,27 @@ public static class TerrainAttributeReader
     /// <summary>Bandera de "no hay suelo" (agujeros del mapa).</summary>
     public const ushort FlagNoGround = 0x0008;
 
+    /// <summary>
+    /// Cierto si una casilla se puede pisar. No se puede si está marcada como
+    /// "no se puede andar" o si es un agujero. Es lo que consultan los bots para
+    /// rodear un obstáculo en vez de atravesarlo.
+    /// </summary>
+    /// <param name="attributes">Los atributos del mapa.</param>
+    /// <param name="x">Casilla en X.</param>
+    /// <param name="y">Casilla en Y.</param>
+    public static bool IsWalkable(ushort[] attributes, int x, int y)
+    {
+        ArgumentNullException.ThrowIfNull(attributes);
+
+        if (x < 0 || y < 0 || x >= TerrainConstants.Size || y >= TerrainConstants.Size)
+        {
+            return false;
+        }
+
+        var value = attributes[(y * TerrainConstants.Size) + x];
+        return (value & (FlagNoMove | FlagNoGround)) == 0;
+    }
+
     /// <summary>Lee los atributos de un fichero .att (en memoria).</summary>
     public static ushort[] Read(byte[] att)
     {

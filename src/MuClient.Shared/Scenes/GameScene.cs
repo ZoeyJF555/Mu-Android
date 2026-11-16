@@ -4,6 +4,7 @@ using Mu.Client.Rendering;
 using Mu.Client.Ui;
 using Mu.Core.Assets;
 using Mu.Core.Formats.Bmd;
+using Mu.Core.Formats.Terrain;
 using Mu.Core.Game;
 using Mu.Core.Rendering;
 using Mu.Core.World;
@@ -25,8 +26,14 @@ public sealed class GameScene : Scene
     /// <summary>Radio del mando en pantalla, como fracción del alto del lienzo.</summary>
     private const float JoystickRadius = 90f;
 
+    /// <summary>Margen del mando hasta el borde del lienzo, en píxeles.</summary>
+    private const float JoystickMargin = 40f;
+
     /// <summary>Altura de los ojos por encima del suelo, para la cámara.</summary>
     private const float EyeHeight = 2f;
+
+    /// <summary>Cuántos grados gira la vista por cada píxel que se arrastra.</summary>
+    private const float DragTurnDegrees = 0.4f;
 
     /// <summary>Mundos que se pueden visitar con los botones de mapa, empezando por Lorencia.</summary>
     private static readonly int[] Worlds = [1, 2, 3, 7, 8, 4, 5, 9, 10];
@@ -69,8 +76,10 @@ public sealed class GameScene : Scene
     private bool _dirty;
 
     private int? _joystickId;
-    private Vector2 _joystickOrigin;
     private Vector2 _joystickOffset;
+
+    private int? _lookId;
+    private Vector2 _lookOrigin;
 
     /// <param name="slot">El espacio de personaje que se va a jugar.</param>
     /// <param name="startWorld">Mundo con el que se empieza (1 = Lorencia).</param>
@@ -151,7 +160,14 @@ public sealed class GameScene : Scene
             var name = WorldNames.GetValueOrDefault(world, $"MUNDO {world}");
             var start = new System.Numerics.Vector3(128f, GroundHeight(128f, 128f), 128f);
             var character = BuildPlayerCharacter();
-            _simulation = new Simulation(character, start, GroundHeight, seed: _slot * 7919 + world, mapName: name);
+            var attributes = _world.Attributes;
+            _simulation = new Simulation(
+                character,
+                start,
+                GroundHeight,
+                seed: _slot * 7919 + world,
+                mapName: name,
+                walkable: (x, y) => TerrainAttributeReader.IsWalkable(attributes, x, y));
             _simulation.ProgressChanged += () => _dirty = true;
 
             _player = LoadPlayer();
@@ -275,16 +291,16 @@ public sealed class GameScene : Scene
             return;
         }
 
-        var move = ReadMove(input);
-        var attack = input.Holding(Hud.AttackButton(VirtualCanvas.Width, VirtualCanvas.Height));
+        var move = ReadMove(input, seconds);
+        var attack = Hud.AttackPressed(input, VirtualCanvas.Width, VirtualCanvas.Height);
         _simulation.Update(seconds, move, attack);
 
         FollowPlayer(seconds);
         SaveIfNeeded();
     }
 
-    /// <summary>El movimiento pedido: el mando táctil o el teclado.</summary>
-    private System.Numerics.Vector2 ReadMove(InputState input)
+    /// <summary>El movimiento pedido: el mando táctil o el teclado, en el mundo.</summary>
+    private System.Numerics.Vector2 ReadMove(InputState input, float seconds)
     {
         var keyboard = input.Keyboard;
         var forward = 0f;
@@ -298,28 +314,60 @@ public sealed class GameScene : Scene
             forward -= 1f;
         }
 
-        var turn = 0f;
+        var strafe = 0f;
         if (keyboard.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.A))
         {
-            turn -= 1f;
+            strafe -= 1f;
         }
 
         if (keyboard.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.D))
         {
-            turn += 1f;
+            strafe += 1f;
         }
 
-        if (forward != 0f || turn != 0f)
+        // Las teclas Q y E giran la vista, porque el mando no la gira solo.
+        if (keyboard.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.Q))
         {
-            return new System.Numerics.Vector2(turn, -forward);
+            _camera.HeadingDegrees -= 120f * seconds;
         }
 
-        return _joystickId is null
-            ? System.Numerics.Vector2.Zero
-            : new System.Numerics.Vector2(_joystickOffset.X / JoystickRadius, _joystickOffset.Y / JoystickRadius);
+        if (keyboard.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.E))
+        {
+            _camera.HeadingDegrees += 120f * seconds;
+        }
+
+        var stick = System.Numerics.Vector2.Zero;
+        if (_joystickId is not null)
+        {
+            stick = new System.Numerics.Vector2(
+                _joystickOffset.X / JoystickRadius,
+                _joystickOffset.Y / JoystickRadius);
+        }
+
+        return ToWorld(new System.Numerics.Vector2(strafe + stick.X, forward - stick.Y));
     }
 
-    /// <summary>La cámara sigue al jugador por detrás.</summary>
+    /// <summary>
+    /// Pasa lo que pide el jugador (adelante y a los lados, sobre la pantalla) a
+    /// una dirección del mundo. El "adelante" es hacia donde mira la cámara, así
+    /// que empujar el mando hacia arriba va siempre hacia el fondo de la pantalla,
+    /// mire donde mire la vista.
+    /// </summary>
+    private System.Numerics.Vector2 ToWorld(System.Numerics.Vector2 input)
+    {
+        var forward = _camera.Forward;
+        var right = _camera.Right;
+        var world = (forward * input.Y) + (right * input.X);
+
+        if (world.LengthSquared() > 1f)
+        {
+            world = System.Numerics.Vector2.Normalize(world);
+        }
+
+        return world;
+    }
+
+    /// <summary>La cámara sigue al jugador.</summary>
     private void FollowPlayer(float seconds)
     {
         if (_simulation is null)
@@ -329,11 +377,6 @@ public sealed class GameScene : Scene
 
         var target = _simulation.PlayerPosition;
         _camera.Target = new System.Numerics.Vector3(target.X, target.Y + EyeHeight, target.Z);
-
-        // El rumbo de la cámara se acerca poco a poco al del personaje, para que
-        // la vista acompañe al girar sin dar tirones.
-        var difference = Normalize(_simulation.PlayerHeadingDegrees - _camera.HeadingDegrees);
-        _camera.HeadingDegrees += difference * MathF.Min(1f, seconds * 4f);
     }
 
     /// <summary>Reparte los toques entre el mando y los botones del interfaz.</summary>
@@ -384,6 +427,56 @@ public sealed class GameScene : Scene
         }
 
         UpdateJoystick(input, width, height);
+        UpdateLook(input, width, height);
+    }
+
+    /// <summary>
+    /// La vista gira al arrastrar el dedo por la mitad derecha de la pantalla,
+    /// como el botón central del ratón en el cliente original. Así se puede
+    /// mirar alrededor sin tocar el mando, que es de la mano izquierda.
+    /// </summary>
+    private void UpdateLook(InputState input, int width, int height)
+    {
+        var look = (TouchPoint?)null;
+        foreach (var point in input.Points)
+        {
+            if (point.Id == _lookId)
+            {
+                look = point;
+                break;
+            }
+        }
+
+        if (look is null)
+        {
+            if (_lookId is not null)
+            {
+                _lookId = null;
+            }
+
+            foreach (var point in input.Points)
+            {
+                if (!input.IsNew(point) || point.X <= width / 2f)
+                {
+                    continue;
+                }
+
+                if (Hud.HitsAttack(new Vector2(point.X, point.Y), width, height))
+                {
+                    continue;
+                }
+
+                _lookId = point.Id;
+                _lookOrigin = new Vector2(point.X, point.Y);
+                break;
+            }
+
+            return;
+        }
+
+        var current = new Vector2(look.Value.X, look.Value.Y);
+        _camera.HeadingDegrees += (current.X - _lookOrigin.X) * DragTurnDegrees;
+        _lookOrigin = current;
     }
 
     /// <summary>Pasa al mapa siguiente o al anterior de la lista.</summary>
@@ -394,11 +487,15 @@ public sealed class GameScene : Scene
     }
 
     /// <summary>
-    /// El mando nace donde se apoya el dedo, mientras no sea sobre un botón, y
-    /// desaparece al levantarlo. Así se maneja con una mano sin mirar.
+    /// El mando vive siempre en su sitio, abajo a la izquierda y entero dentro
+    /// de la pantalla, y no donde se apoye el dedo: así nunca sale cortado por
+    /// el borde. Al apoyar un dedo en la mitad izquierda se toma como el pulgar
+    /// que empuja el mando; al levantarlo, el mando vuelve a su centro.
     /// </summary>
     private void UpdateJoystick(InputState input, int width, int height)
     {
+        var centre = JoystickCentre(width, height);
+
         var stick = (TouchPoint?)null;
         foreach (var point in input.Points)
         {
@@ -424,25 +521,32 @@ public sealed class GameScene : Scene
                     continue;
                 }
 
-                if (Hud.AttackButton(width, height).Contains((int)point.X, (int)point.Y))
+                if (Hud.HitsAttack(new Vector2(point.X, point.Y), width, height))
                 {
                     continue;
                 }
 
                 _joystickId = point.Id;
-                _joystickOrigin = new Vector2(point.X, point.Y);
-                _joystickOffset = Vector2.Zero;
                 break;
             }
         }
 
+
         if (stick is { } current)
         {
-            var offset = new Vector2(current.X, current.Y) - _joystickOrigin;
+            var offset = new Vector2(current.X, current.Y) - centre;
             var length = offset.Length();
             _joystickOffset = length > JoystickRadius ? offset * (JoystickRadius / length) : offset;
         }
+        else
+        {
+            _joystickOffset = Vector2.Zero;
+        }
     }
+
+    /// <summary>Dónde está el centro del mando: abajo a la izquierda, siempre entero.</summary>
+    private static Vector2 JoystickCentre(int width, int height) =>
+        new(JoystickMargin + JoystickRadius, height - JoystickMargin - JoystickRadius);
 
     private void SaveIfNeeded()
     {
@@ -520,7 +624,7 @@ public sealed class GameScene : Scene
             input,
             VirtualCanvas.Width,
             VirtualCanvas.Height,
-            _joystickId is null ? null : _joystickOrigin,
+            JoystickCentre(VirtualCanvas.Width, VirtualCanvas.Height),
             _joystickOffset,
             JoystickRadius);
 
@@ -648,21 +752,6 @@ public sealed class GameScene : Scene
     {
         var box = new Rectangle((VirtualCanvas.Width / 2) - 230, (VirtualCanvas.Height / 2) - 130, 460, 260);
         return new Rectangle(box.Right - 218, box.Bottom - 92, 190, 40);
-    }
-
-    private static float Normalize(float degrees)
-    {
-        degrees %= 360f;
-        if (degrees > 180f)
-        {
-            degrees -= 360f;
-        }
-        else if (degrees < -180f)
-        {
-            degrees += 360f;
-        }
-
-        return degrees;
     }
 
     /// <summary>Un actor dibujado: su dibujante y de dónde saca posición y acción.</summary>

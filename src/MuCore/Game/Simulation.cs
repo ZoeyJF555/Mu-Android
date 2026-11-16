@@ -27,8 +27,13 @@ public sealed class Simulation
     /// <summary>Segundos que se ve la animación de golpe del jugador.</summary>
     public const float PlayerAttackAnimation = 0.55f;
 
-    /// <summary>Velocidad del jugador, en unidades por segundo.</summary>
-    public const float PlayerSpeed = 7f;
+    /// <summary>
+    /// Velocidad del jugador, en unidades por segundo. Son 3,5 casillas por
+    /// segundo, como el cliente original (350 cm/s): con la animación de caminar
+    /// a 5 fotogramas por segundo, los pies no patinan. Andar más rápido que la
+    /// animación es lo que hacía que el personaje pareciera deslizarse.
+    /// </summary>
+    public const float PlayerSpeed = 3.5f;
 
     /// <summary>Vida que recupera el jugador cada segundo, poco a poco.</summary>
     public const float PlayerRegeneration = 4f;
@@ -57,6 +62,7 @@ public sealed class Simulation
     ];
 
     private readonly Func<float, float, float> _ground;
+    private readonly Func<int, int, bool>? _walkable;
     private readonly Random _random;
     private readonly List<Bot> _bots = [];
     private readonly List<Monster> _monsters = [];
@@ -74,12 +80,14 @@ public sealed class Simulation
     /// <param name="ground">Altura del suelo en un punto del mapa.</param>
     /// <param name="seed">Semilla del azar, para que la partida salga igual en las pruebas.</param>
     /// <param name="mapName">Nombre del mapa, solo para el mensaje de bienvenida.</param>
+    /// <param name="walkable">Cierto si una casilla se puede pisar; null = todas.</param>
     public Simulation(
         Character character,
         Vector3 start,
         Func<float, float, float> ground,
         int seed = 12345,
-        string mapName = "LORENCIA")
+        string mapName = "LORENCIA",
+        Func<int, int, bool>? walkable = null)
     {
         ArgumentNullException.ThrowIfNull(character);
         ArgumentNullException.ThrowIfNull(ground);
@@ -87,6 +95,7 @@ public sealed class Simulation
         Player = character;
         Start = start;
         _ground = ground;
+        _walkable = walkable;
         _random = new Random(seed);
 
         PlayerPosition = new Vector3(start.X, ground(start.X, start.Z), start.Z);
@@ -132,11 +141,12 @@ public sealed class Simulation
     public event Action? ProgressChanged;
 
     /// <summary>
-    /// Avanza un fotograma. El movimiento llega como un vector: X gira a la
-    /// derecha, Y avanza hacia delante.
+    /// Avanza un fotograma. El movimiento llega como una dirección en el mundo
+    /// (X hacia el este, Y hacia el sur): el personaje anda hacia allí y mira
+    /// hacia donde anda, como en MU, en vez de girar sobre sí mismo.
     /// </summary>
     /// <param name="seconds">Segundos transcurridos.</param>
-    /// <param name="move">Movimiento pedido, de -1 a 1 en cada eje.</param>
+    /// <param name="move">Dirección del movimiento, de -1 a 1 en cada eje.</param>
     /// <param name="attack">Cierto si se ha pedido atacar en este fotograma.</param>
     public void Update(float seconds, Vector2 move, bool attack)
     {
@@ -205,14 +215,20 @@ public sealed class Simulation
             return;
         }
 
-        var forward = Math.Clamp(-move.Y, -1f, 1f);
-        PlayerHeadingDegrees = WrapDegrees(PlayerHeadingDegrees + (move.X * 200f * seconds));
+        var direction = new Vector2(move.X, -move.Y);
+        var length = direction.Length();
+        _walking = length > 0.01f;
 
-        _walking = MathF.Abs(forward) > 0.01f;
         if (_walking)
         {
-            var heading = PlayerHeadingDegrees * MathF.PI / 180f;
-            var step = new Vector3(MathF.Cos(heading), 0f, MathF.Sin(heading)) * (forward * PlayerSpeed * seconds);
+            direction /= length;
+
+            // El personaje mira hacia donde anda, como en MU: no hay giro sobre
+            // sí mismo, se apunta el rumbo y se avanza en esa dirección.
+            var heading = MathF.Atan2(direction.Y, direction.X) * 180f / MathF.PI;
+            PlayerHeadingDegrees = WrapDegrees(heading);
+
+            var step = new Vector3(direction.X, 0f, direction.Y) * (PlayerSpeed * seconds);
             var position = PlayerPosition + step;
             position.X = Math.Clamp(position.X, 1f, 255f);
             position.Z = Math.Clamp(position.Z, 1f, 255f);
@@ -353,7 +369,7 @@ public sealed class Simulation
         foreach (var bot in _bots)
         {
             var current = bot;
-            current.Update(seconds, _ground, _monsters, monster => OnBotKilledMonster(current, monster));
+            current.Update(seconds, _ground, _monsters, monster => OnBotKilledMonster(current, monster), _walkable);
 
             if (current.Body.IsAlive && current.Body.Health < current.Body.MaxHealth)
             {

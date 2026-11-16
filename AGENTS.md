@@ -150,6 +150,23 @@ El mundo 1 con el personaje y seis monstruos necesita 258 ficheros y 9 MB. Los
 46 mundos con sus objetos, personaje y monstruos necesitan 5.194 ficheros y
 249 MB.
 
+Se publican dos APK: **Lorencia** (solo el mundo 1, ~16 MB) y **Completo** (los
+46 mundos, ~190 MB). El conjunto reducido no se recorta a mano: se generan los
+ficheros que hacen falta cargando el mundo con un origen que anota lo que se lee.
+El programa de apoyo carga `WorldLoader.Load(log, 1)`, el personaje con su espada
+y los seis monstruos, y copia solo lo que pasó por el registro:
+
+```csharp
+var log = new LoggingSource(new FileAssetSource(root));
+WorldLoader.Load(log, 1);
+CharacterLoader.Load(log, 1, "Item/Sword01.bmd");
+foreach (var m in new[] { "Monster/Monster01.bmd", /* ... */ "Monster/Monster06.bmd" })
+    SkinnedModelLoader.Load(log, m);
+// copiar a la carpeta destino cada ruta de log.Files
+```
+
+Así la lista sale de lo que el juego pide de verdad, sin adivinar carpetas.
+
 ## Texto en pantalla
 
 El proyecto no usa el empaquetador de contenido de MonoGame, así que no hay
@@ -193,6 +210,47 @@ varios teléfonos y falla si baja de 7 mm, así que no se puede encoger sin que
 salte. Al tocar la altura del teclado hay que comprobar que el formulario de
 login y el de crear personaje siguen cabiendo encima en cualquier forma de
 pantalla.
+
+## Terreno, cámara y movimiento
+
+El suelo se dibuja con la textura real de cada casilla, repetida por el mapa.
+La coordenada de textura de una casilla es `x · 64 / ancho`, como en el cliente
+original (`TerrainControl.RenderTexture`), de modo que una textura de 256 px
+cubre 4 × 4 casillas y una de 128 px cubre 2 × 2. Con el factor equivocado el
+suelo sale estirado como una mancha lisa (el aspecto de "bloques de Minecraft").
+La geometría se agrupa en tandas por textura (`TerrainMeshBuilder`), la base
+opaca y la capa de encima mezclada. Los índices de textura que no existen en los
+datos (9 y siguientes) caen a la primera, para no dejar agujeros.
+
+La luz del terreno es la del mapa (`TerrainLight.OZJ`) multiplicada por la
+inclinación de cada casilla: `dot(normal, (0.5, -0.5, 0.5)) + 0.5`, como
+`TerrainControl.CreateTerrainLight`. Las zonas oscuras de Lorencia son auténticas
+del original, no un fallo de dibujo.
+
+La cámara es fija, como la del original: mira al personaje desde atrás y desde
+arriba con un ángulo que no sigue al personaje (yaw -42°, inclinación 44,18°,
+distancia 1700, FOV 35). Se gira arrastrando el dedo por la mitad derecha de la
+pantalla (equivale al botón central del ratón en el original) o con Q y E en el
+escritorio. El mando avanza en el plano de la cámara, así que "hacia arriba" es
+siempre hacia el fondo de la pantalla, mire donde mire la vista.
+
+El botón de ataque se dibuja redondo y se detecta redondo (`Hud.HitsAttack`): un
+rectángulo pintado pero detectado como círculo (o al revés) deja sin efecto los
+toques en las esquinas. Al empezar a andar se salta ese punto para que el mando no
+arranque encima del botón (`GameScene.UpdateJoystick`). El mando vive siempre
+entero abajo a la izquierda, sin depender de dónde se apoye el dedo.
+
+Los personajes andan a 3,5 casillas por segundo (350 cm/s del original) con la
+animación de caminar a 5 fotogramas por segundo. Andar más rápido que la
+animación es lo que hacía que parecieran patinar, así que si se toca una cosa hay
+que tocar la otra (`Simulation.PlayerSpeed`, `Bot.WalkSpeed` y
+`CharacterRenderer.FramesPerSecond`). Al cambiar de acción la animación vuelve al
+primer fotograma, como el original.
+
+Los bots trazan su ruta con A* (`MuCore/Game/Pathfinding`), consultando qué
+casillas se pueden pisar (`TerrainAttributeReader.IsWalkable`), de modo que
+rodean los obstáculos en vez de atravesarlos. Si no hay camino (un rincón
+cerrado) o la búsqueda es muy larga, siguen en línea recta.
 
 ## Pruebas
 

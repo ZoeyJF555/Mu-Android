@@ -31,8 +31,11 @@ public sealed class Bot
     /// <summary>Distancia a la que ya puede pegar, en unidades.</summary>
     public const float AttackRange = 2.2f;
 
-    /// <summary>Velocidad al andar, en unidades por segundo.</summary>
-    public const float WalkSpeed = 5.5f;
+    /// <summary>
+    /// Velocidad al andar, en unidades por segundo. Es la misma que la del
+    /// jugador, para que su paso (la animación de caminar) no patine.
+    /// </summary>
+    public const float WalkSpeed = 3.5f;
 
     /// <summary>Segundos entre golpe y golpe.</summary>
     public const float AttackInterval = 1.1f;
@@ -44,6 +47,8 @@ public sealed class Bot
     private Vector3 _destination;
     private float _idleLeft;
     private float _thinkLeft;
+    private List<Vector2>? _path;
+    private int _pathIndex;
 
     /// <param name="name">Nombre que se enseña encima del bot.</param>
     /// <param name="home">Centro de su ronda.</param>
@@ -87,14 +92,21 @@ public sealed class Bot
     public BotAction Action { get; private set; }
 
     /// <summary>
-    /// Avanza un fotograma. Recibe la altura del suelo para no hundirse y la
-    /// lista de monstruos a los que puede pegar.
+    /// Avanza un fotograma. Recibe la altura del suelo para no hundirse, la
+    /// lista de monstruos a los que puede pegar y si una casilla se puede pisar
+    /// (para rodear los obstáculos en vez de atravesarlos).
     /// </summary>
     /// <param name="seconds">Segundos transcurridos.</param>
     /// <param name="ground">Altura del suelo en un punto.</param>
     /// <param name="monsters">Los monstruos que hay en el mapa.</param>
     /// <param name="onKill">Aviso de que ha matado a un monstruo (da experiencia).</param>
-    public void Update(float seconds, Func<float, float, float> ground, IReadOnlyList<Monster> monsters, Action<Monster>? onKill = null)
+    /// <param name="walkable">Cierto si una casilla se puede pisar; null = todas.</param>
+    public void Update(
+        float seconds,
+        Func<float, float, float> ground,
+        IReadOnlyList<Monster> monsters,
+        Action<Monster>? onKill = null,
+        Func<int, int, bool>? walkable = null)
     {
         ArgumentNullException.ThrowIfNull(ground);
         ArgumentNullException.ThrowIfNull(monsters);
@@ -128,10 +140,10 @@ public sealed class Bot
                 Idle(seconds);
                 break;
             case BotState.Walking:
-                Walk(seconds, ground);
+                Walk(seconds, ground, walkable);
                 break;
             case BotState.Chasing:
-                Chase(seconds, ground, monsters);
+                Chase(seconds, ground, monsters, walkable);
                 break;
             case BotState.Attacking:
                 Attack(seconds, monsters, onKill);
@@ -178,12 +190,13 @@ public sealed class Bot
 
         State = BotState.Walking;
         _destination = RandomPointAroundHome();
+        _path = null;
     }
 
-    private void Walk(float seconds, Func<float, float, float> ground)
+    private void Walk(float seconds, Func<float, float, float> ground, Func<int, int, bool>? walkable)
     {
         Action = BotAction.Walking;
-        if (StepTowards(_destination, seconds))
+        if (StepTowards(_destination, seconds, walkable))
         {
             State = BotState.Idle;
             _idleLeft = (float)(0.5 + (_random.NextDouble() * 2.5));
@@ -192,7 +205,7 @@ public sealed class Bot
         _ = ground;
     }
 
-    private void Chase(float seconds, Func<float, float, float> ground, IReadOnlyList<Monster> monsters)
+    private void Chase(float seconds, Func<float, float, float> ground, IReadOnlyList<Monster> monsters, Func<int, int, bool>? walkable)
     {
         var target = NearestMonster(monsters);
         if (target is null)
@@ -209,7 +222,7 @@ public sealed class Bot
             return;
         }
 
-        StepTowards(target.Body.Position, seconds);
+        StepTowards(target.Body.Position, seconds, walkable);
         _ = ground;
     }
 
@@ -268,7 +281,7 @@ public sealed class Bot
     }
 
     /// <summary>Anda hacia un punto. Devuelve cierto si ya ha llegado.</summary>
-    private bool StepTowards(Vector3 destination, float seconds)
+    private bool StepTowards(Vector3 destination, float seconds, Func<int, int, bool>? walkable)
     {
         var delta = destination - Body.Position;
         delta.Y = 0f;
@@ -278,12 +291,68 @@ public sealed class Bot
             return true;
         }
 
-        var direction = delta / distance;
-        FaceTowards(destination);
+        var waypoint = NextWaypoint(destination, walkable);
+
+        var toWaypoint = waypoint - Body.Position;
+        toWaypoint.Y = 0f;
+        var toWaypointDistance = toWaypoint.Length();
+        if (toWaypointDistance <= 0.05f)
+        {
+            return false;
+        }
+
+        var direction = toWaypoint / toWaypointDistance;
+        FaceTowards(waypoint);
 
         var advance = MathF.Min(WalkSpeed * seconds, distance);
         Body.Position += direction * advance;
         return advance >= distance - 0.05f;
+    }
+
+    /// <summary>
+    /// El punto al que hay que apuntar ahora mismo. Si hay un camino trazado y
+    /// aún queda por recorrer, es su siguiente esquina; si no, se traza uno
+    /// nuevo con A* y se devuelve el primero. Sin camino (rincón cerrado), se va
+    /// en línea recta, que es mejor que quedarse parado.
+    /// </summary>
+    private Vector3 NextWaypoint(Vector3 destination, Func<int, int, bool>? walkable)
+    {
+        if (_path is not null)
+        {
+            if (_pathIndex < _path.Count)
+            {
+                var step = _path[_pathIndex];
+                var point = new Vector3(step.X, 0f, step.Y);
+                var flat = new Vector2(point.X - Body.Position.X, point.Z - Body.Position.Z);
+                if (flat.Length() <= 0.4f)
+                {
+                    _pathIndex++;
+                    return NextWaypoint(destination, walkable);
+                }
+
+                return point;
+            }
+
+            _path = null;
+        }
+
+        if (walkable is null)
+        {
+            return destination;
+        }
+
+        var start = new Vector2(Body.Position.X, Body.Position.Z);
+        var goal = new Vector2(destination.X, destination.Z);
+        _path = Pathfinding.FindPath(start, goal, walkable);
+        _pathIndex = 0;
+
+        if (_path is null || _path.Count == 0)
+        {
+            _path = null;
+            return destination;
+        }
+
+        return NextWaypoint(destination, walkable);
     }
 
     private void FaceTowards(Vector3 point)
